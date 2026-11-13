@@ -1,14 +1,14 @@
 """LunarSight Streamlit application."""
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from horizons import load_ephemeris_csv
+from horizons import HorizonsError, fetch_ephemeris, load_ephemeris_csv
 
 ROOT = Path(__file__).resolve().parent
 
@@ -22,6 +22,24 @@ def load_sites() -> list[dict]:
 @st.cache_data
 def load_demo() -> pd.DataFrame:
     return load_ephemeris_csv(str(ROOT / "data" / "demo_ephemeris.csv"))
+
+
+@st.cache_data(ttl=3600, max_entries=24, show_spinner=False)
+def load_live(
+    latitude_deg: float,
+    longitude_deg_east: float,
+    start_date_iso: str,
+    duration_hours: int,
+) -> pd.DataFrame:
+    """Fetch and cache only successful Horizons responses for one hour."""
+    start_utc = datetime.fromisoformat(start_date_iso).replace(tzinfo=timezone.utc)
+    stop_utc = start_utc + timedelta(hours=duration_hours)
+    return fetch_ephemeris(
+        latitude_deg,
+        longitude_deg_east,
+        start_utc,
+        stop_utc,
+    )
 
 
 def rebase_demo(frame: pd.DataFrame, selected_date: date, duration_hours: int) -> pd.DataFrame:
@@ -62,6 +80,8 @@ st.markdown("""
 .hero p { color: #a5b4c7; max-width: 780px; font-size: 1.04rem; }
 .demo { border: 1px solid #a16207; background: #42200666; color: #fde68a;
         padding: .75rem 1rem; border-radius: .6rem; }
+.live { border: 1px solid #0e7490; background: #08334466; color: #a5f3fc;
+        padding: .75rem 1rem; border-radius: .6rem; }
 [data-testid="stMetric"] { background: #0f172acc; border: 1px solid #1e3a5f;
                           padding: 1rem; border-radius: .7rem; }
 </style>
@@ -70,6 +90,7 @@ st.markdown("""
 sites = load_sites()
 with st.sidebar:
     st.header("Mission parameters")
+    data_mode = st.radio("Data source", ["Demo Data", "Live NASA Data"])
     site_name = st.selectbox("Landing site", [site["name"] for site in sites])
     selected_date = st.date_input("Start date (UTC)", value=date.today())
     duration = st.selectbox("Analysis duration", [24, 48, 72], index=1,
@@ -77,16 +98,43 @@ with st.sidebar:
     site = next(item for item in sites if item["name"] == site_name)
     st.caption(f"Demo coordinate: {site['latitude_deg']:.2f}° lat, "
                f"{site['longitude_deg_east']:.2f}° E")
+    st.caption("Site coordinates are synthetic and not validated landing locations.")
     st.divider()
     st.caption("Local horizon: ideal geometric plane. Terrain is not modeled.")
 
-frame = rebase_demo(load_demo(), selected_date, duration)
+actual_source = data_mode
+live_error: str | None = None
+if data_mode == "Live NASA Data":
+    try:
+        with st.spinner("Requesting Sun and Earth ephemerides from NASA JPL Horizons..."):
+            frame = load_live(
+                site["latitude_deg"],
+                site["longitude_deg_east"],
+                selected_date.isoformat(),
+                duration,
+            )
+    except HorizonsError as error:
+        live_error = str(error)
+        actual_source = "Demo Data"
+        frame = rebase_demo(load_demo(), selected_date, duration)
+else:
+    frame = rebase_demo(load_demo(), selected_date, duration)
+
 st.markdown("""<div class="hero"><div class="eyebrow">LUNAR SOUTH POLE · MISSION PLANNING</div>
 <h1>🌙 LunarSight</h1><p>Compare candidate landing sites through Sun illumination
 and Earth line-of-sight geometry.</p></div>""", unsafe_allow_html=True)
-st.markdown("<div class='demo'><strong>Synthetic demo mode</strong> — charts are "
-            "illustrative and are not live NASA calculations.</div>",
-            unsafe_allow_html=True)
+if actual_source == "Live NASA Data":
+    st.markdown("<div class='live'><strong>Live NASA data</strong> — Sun and Earth "
+                "azimuth/elevation were returned by JPL Horizons. The selected site "
+                "coordinate is still an unverified demonstration location.</div>",
+                unsafe_allow_html=True)
+else:
+    st.markdown("<div class='demo'><strong>Synthetic demo mode</strong> — charts are "
+                "illustrative and are not live NASA calculations.</div>",
+                unsafe_allow_html=True)
+if live_error:
+    st.error(f"Live Horizons request failed: {live_error}")
+    st.info("The application automatically switched to Demo Data.")
 
 st.subheader(site_name)
 c1, c2, c3 = st.columns(3)
