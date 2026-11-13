@@ -24,7 +24,7 @@ Coordinates in sites.json are lunar geodetic latitude and east-positive longitud
 ## Architecture and status
 
 - app.py: Streamlit UI and offline demo loading.
-- horizons.py: validation and a verified JPL Horizons request builder.
+- horizons.py: validation, JPL Horizons HTTP client, response parser, and Sun/Earth table merger.
 - analysis.py: stable interface for Developer 2; algorithms intentionally remain unimplemented.
 - sites.json: demonstration catalog.
 - data/demo_ephemeris.csv: synthetic 72-hour profile, rebased to the selected date.
@@ -32,4 +32,4 @@ Coordinates in sites.json are lunar geodetic latitude and east-positive longitud
 
 The request syntax follows the official [Horizons API documentation](https://ssd-api.jpl.nasa.gov/doc/horizons.html) and [system manual](https://ssd.jpl.nasa.gov/horizons/manual.html): lunar surface observers use CENTER='coord@301', geodetic SITE_COORD ordered east longitude, latitude, height-km, and observer quantity 4 for apparent azimuth/elevation.
 
-Live fetching and parsing are intentionally not connected. Sun and Earth require separate requests (target IDs 10 and 399) merged by UTC timestamp after live integration tests.
+The sidebar can switch between offline Demo Data and Live NASA Data. Live mode requests the Sun and Earth sequentially (target IDs 10 and 399), merges them by UTC timestamp, and caches successful results for one hour. If the network or service fails, the UI reports the cause and falls back to demo data. Bundled site coordinates remain synthetic and unverified even when their ephemerides are computed from live Horizons data.
