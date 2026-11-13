@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "coordinate_convention": "Lunar geodetic latitude and east-positive longitude, degrees; demonstration values only.",
+  "sites": [
+    {"id": "demo_ridge_alpha", "name": "Demo Ridge Alpha", "latitude_deg": -89.4, "longitude_deg_east": 45.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false},
+    {"id": "demo_plateau_beta", "name": "Demo Plateau Beta", "latitude_deg": -88.8, "longitude_deg_east": 120.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false},
+    {"id": "demo_crater_rim_gamma", "name": "Demo Crater Rim Gamma", "latitude_deg": -89.1, "longitude_deg_east": 285.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false}
+  ]
+}
