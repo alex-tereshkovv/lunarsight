@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-11-14T11:07:38.137355+00:00",
+  "image": "lola-shackleton-hillshade.webp",
+  "image_size_px": [
+    1840,
+    800
+  ],
+  "source_resolution_m_per_pixel": 5.0,
+  "projected_bounds_m": {
+    "x_min": -16002.5,
+    "y_min": -14997.5,
+    "x_max": 6997.5,
+    "y_max": -4997.5
+  },
+  "projection": {
+    "name": "Lunar south polar stereographic",
+    "latitude_of_origin_deg": -90.0,
+    "central_meridian_deg": 0.0,
+    "scale_factor": 1.0,
+    "false_easting_m": 0.0,
+    "false_northing_m": 0.0,
+    "moon_radius_m": 1737400.0,
+    "reference_frame": "MOON_ME, DE421",
+    "longitude_direction": "east-positive"
+  },
+  "sources": [
+    "https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/Site01/Site01_final_adj_5mpp_surf.tif",
+    "https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/Site04/Site04_final_adj_5mpp_surf.tif"
+  ],
+  "processing": "Site01/Site04 overlap feather-blended; long nonphysical raster-line spikes removed for display; terrain hillshade uses azimuth 315\u00b0 and elevation 45\u00b0. Hillshade is not timestamp-specific illumination."
+}

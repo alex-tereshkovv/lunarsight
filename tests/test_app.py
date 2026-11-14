@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from horizons import EphemerisValidationError, HorizonsNetworkError
+from horizons import EphemerisValidationError, HorizonsNetworkError, HorizonsResponseError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -187,7 +187,7 @@ def test_sidebar_navigation_opens_all_sections():
         assert any(heading in item.value for item in app.markdown)
 
 
-def test_solar_rover_planner_defaults_to_explicit_synthetic_scenario():
+def test_solar_rover_planner_defaults_to_explicit_real_nasa_cache():
     with patch("horizons.fetch_ephemeris") as fetch:
         app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
         app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
@@ -195,31 +195,53 @@ def test_solar_rover_planner_defaults_to_explicit_synthetic_scenario():
     assert not app.exception
     fetch.assert_not_called()
     assert widget_with_label(
-        app.selectbox, "Scientific Data Source"
-    ).value == "Synthetic Demonstration"
-    assert any(
-        "not NASA ephemerides" in item.value
-        for item in app.warning
-    )
+        app.selectbox, "Ephemerides"
+    ).value == "NASA JPL Horizons — Cached"
+    assert "Synthetic Demonstration" not in widget_with_label(
+        app.selectbox, "Ephemerides"
+    ).options
+    assert not app.error
+    assert not app.warning
 
 
 def test_solar_rover_cached_nasa_source_is_offline_and_explicit():
     with patch("horizons.fetch_ephemeris") as fetch:
         app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
         app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
-        widget_with_label(app.selectbox, "Scientific Data Source").set_value(
+        widget_with_label(app.selectbox, "Ephemerides").set_value(
             "NASA JPL Horizons — Cached"
         )
         app.date_input[0].set_value(date(2026, 11, 14))
-        widget_with_label(app.selectbox, "Observation Period").set_value(7)
+        widget_with_label(app.selectbox, "Period").set_value(7)
         app.form_submit_button[0].click().run(timeout=30)
 
     assert not app.exception
     fetch.assert_not_called()
     assert not app.error
+    assert widget_with_label(app.selectbox, "Ephemerides").value == (
+        "NASA JPL Horizons — Cached"
+    )
+
+
+def test_rover_live_failure_falls_back_only_to_explicit_matching_nasa_cache():
+    with patch(
+        "horizons.fetch_ephemeris",
+        side_effect=HorizonsResponseError("simulated network outage"),
+    ) as fetch:
+        app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
+        app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
+        widget_with_label(app.selectbox, "Ephemerides").set_value(
+            "NASA JPL Horizons — Live"
+        )
+        app.form_submit_button[0].click().run(timeout=30)
+
+    assert not app.exception
+    assert not app.error
+    assert fetch.call_count == 1
     assert any(
-        "NASA JPL Horizons — Cached" in item.value
-        for item in app.success
+        "fixed real-NASA cache" in item.value
+        and "simulated network outage" in item.value
+        for item in app.warning
     )
 
 

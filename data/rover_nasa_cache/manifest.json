@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
-  "source_label": "NASA JPL Horizons — Cached",
+  "schema_version": 2,
+  "source_label": "NASA JPL Horizons \u2014 Cached",
   "source_url": "https://ssd.jpl.nasa.gov/api/horizons.api",
-  "retrieved_utc": "2026-11-14",
+  "retrieved_utc": "2026-11-14T11:06:58.186395+00:00",
   "observation_start_utc": "2026-11-14T00:00:00Z",
   "observation_end_utc": "2026-11-21T00:00:00Z",
   "sample_interval_hours": 3,
@@ -13,12 +13,44 @@
     "earth": "399"
   },
   "quantities": "4 (apparent azimuth and elevation, AIRLESS)",
-  "files": {
-    "W1": "W1.csv",
-    "W2": "W2.csv",
-    "W3": "W3.csv",
-    "W4": "W4.csv",
-    "W5": "W5.csv"
+  "stations": {
+    "CR1": {
+      "latitude_deg": -89.468,
+      "longitude_deg_east": 222.6
+    },
+    "CR2": {
+      "latitude_deg": -89.5,
+      "longitude_deg_east": 222.1
+    },
+    "CR3": {
+      "latitude_deg": -89.418,
+      "longitude_deg_east": 221.3
+    },
+    "SR1": {
+      "latitude_deg": -89.685,
+      "longitude_deg_east": 196.7
+    },
+    "SR2": {
+      "latitude_deg": -89.74,
+      "longitude_deg_east": 201.2
+    },
+    "SR3": {
+      "latitude_deg": -89.808,
+      "longitude_deg_east": 205.9
+    },
+    "PSR1": {
+      "latitude_deg": -89.575,
+      "longitude_deg_east": 196.7
+    }
   },
-  "scientific_note": "Object-centre geometry relative to an ideal horizon; terrain, power, link budget, and hazards are not modeled."
+  "files": {
+    "CR1": "CR1.csv",
+    "CR2": "CR2.csv",
+    "CR3": "CR3.csv",
+    "SR1": "SR1.csv",
+    "SR2": "SR2.csv",
+    "SR3": "SR3.csv",
+    "PSR1": "PSR1.csv"
+  },
+  "scientific_note": "Object-centre geometry relative to an ideal horizon; terrain, power, link budget, traversability, and hazards are not modeled."
 }
