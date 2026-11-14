@@ -29,8 +29,8 @@ score.
 - Interactive Plotly elevation and direction visualizations.
 - Matched-period comparison of two lunar surface observers.
 - Synchronized Solar Rover Planner with seven published NASA representative-
-  traverse stations, UTC scrubbing, playback controls, and explainable
-  geometric dual-visibility decisions.
+  traverse stations, UTC scrubbing, loop playback, and separate Visibility
+  Optimization and demonstration-only Continuous Exploration modes.
 - Georeferenced terrain hillshade preprocessed from NASA PGDA Site01/Site04
   LOLA 5 m/pixel DEMs in lunar south-polar stereographic metres.
 - Explicitly manifested offline NASA cache for the seven rover stations over
@@ -100,9 +100,11 @@ update process.
 4. Open **Site Comparison**, select two locations, and compare the same UTC
    interval for both observers.
 5. Open **Solar Rover Planner**. The default fixed-period dataset is a real,
-   locally cached NASA Horizons result. Press Play, scrub the scientific
-   timeline, and confirm that the rover, map, UTC cursor, and status panel stay
-   synchronized. The optional live mode makes separate Sun and Earth requests
+   locally cached NASA Horizons result. In **Visibility Optimization**, press
+   Play and scrub the scientific timeline to confirm that the rover, chart,
+   UTC cursor, and status panel stay synchronized. Then select **Continuous
+   Exploration** to demonstrate a clearly labelled conceptual closed route and
+   loop playback. The optional live mode makes separate Sun and Earth requests
    for each of seven verified stations.
 6. Open **Data & Sources** and **About** to explain provenance and limitations.
 
@@ -158,12 +160,22 @@ processing note, and source URLs are recorded in
 from that projected coordinate system. The hillshade uses a fixed display
 light direction and is not a timestamp-specific sunlight or shadow simulation.
 
-The default scenarios use the NASA-published CR1→SR1 and SR3→PSR1 endpoints.
-The Data Book reports traverse lengths of 11.15 km and 8.66 km respectively.
-Because the source route polylines have not been digitized into LunarSight, the
-dashboard draws only a dashed straight station connector and reports its
-straight-line length separately. It is not a claim of NASA route geometry,
-terrain safety, or verified traversability.
+The main map is the georeferenced Site01/Site04 route crop. The current
+[IAU/USGS control-network centre for Shackleton](https://planetarynames.wr.usgs.gov/Feature/5450)
+is `89.67° S, 129.78° E`, just outside that crop, so LunarSight does not attach
+the crater name to an unrelated dark feature. Instead, the compact inset uses
+NASA's separate-scale
+[multi-temporal south-pole overview](https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/)
+with Shackleton at its published centre. The inset is context only, not the
+route-map scale and not timestamp-specific sunlight.
+
+Visibility Optimization uses the real station ephemerides to make conservative
+geometric visibility decisions. Continuous Exploration is a demonstration-only
+closed walk along explicit graph links and does not claim optimality. Because
+the NASA traverse polylines have not been digitized into LunarSight, all drawn
+links remain straight conceptual connectors between published stations. Their
+display length is not a published NASA traverse length, a terrain-safe path, or
+verified traversability.
 
 ## Scientific limitations
 
@@ -182,6 +194,9 @@ zero-degree local horizon:
 - Solar Rover Planner station coordinates are published NASA representative-
   traverse locations. The dashed connector is conceptual and is not the NASA
   route polyline or a terrain/traversability product.
+- Continuous Exploration selects a closed conceptual station walk that fits the
+  selected mission period. Its repeated playback is an interface demonstration,
+  not a visibility optimum or an autonomous-navigation result.
 - The LOLA-derived background is a terrain hillshade, not real-time sunlight.
   The historical NASA
   [south-pole illumination reference](https://science.nasa.gov/photojournal/south-pole-illumination-map/)

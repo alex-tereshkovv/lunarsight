@@ -28,8 +28,8 @@ from horizons import (
 from rover_component import solar_rover_simulation
 from rover_planner import (
     CONNECTIONS,
+    CONTINUOUS_EXPLORATION_ID,
     DYNAMIC_ROUTE_ID,
-    ROUTE_SCENARIOS,
     SOURCE_NASA_CACHED,
     SOURCE_NASA_LIVE,
     SOURCE_SYNTHETIC,
@@ -39,6 +39,7 @@ from rover_planner import (
     build_synthetic_ephemerides,
     downsample_ephemeris,
     get_route_scenario,
+    plan_continuous_exploration,
     plan_route,
 )
 
@@ -994,20 +995,21 @@ def render_solar_rover_planner() -> None:
         with duration_col:
             duration_days = st.selectbox(
                 "Period",
-                [7, 14],
+                [7, 14, 28, 60],
                 format_func=lambda value: f"{value} days",
                 key="rover_duration_days",
             )
         with route_col:
             route_id = st.selectbox(
                 "Planning Mode",
-                [DYNAMIC_ROUTE_ID, *[scenario.id for scenario in ROUTE_SCENARIOS]],
+                [DYNAMIC_ROUTE_ID, CONTINUOUS_EXPLORATION_ID],
                 index=0,
                 format_func=lambda value: get_route_scenario(value).label,
                 key="rover_route",
                 help=(
-                    "Dynamic mode evaluates all seven verified stations over one "
-                    "shared UTC timeline. Links are conceptual, not terrain-validated."
+                    "Visibility Optimization evaluates real ephemerides. Continuous "
+                    "Exploration is a demonstration-only closed playback route. "
+                    "All graph links are conceptual, not terrain-validated."
                 ),
             )
         with source_col:
@@ -1084,16 +1086,20 @@ def render_solar_rover_planner() -> None:
                 )
                 actual_source = SOURCE_NASA_CACHED
             scenario = get_route_scenario(route_id)
-            route_connections = (
-                CONNECTIONS
-                if route_id == DYNAMIC_ROUTE_ID
-                else ((scenario.station_ids[0], scenario.station_ids[1]),)
-            )
-            segments = plan_route(
-                frames,
-                rover_speed_kmh=rover_speed,
-                connections=route_connections,
-                start_waypoint_id=scenario.station_ids[0],
+            route_connections = CONNECTIONS
+            segments = (
+                plan_continuous_exploration(
+                    frames,
+                    rover_speed_kmh=rover_speed,
+                    connections=route_connections,
+                )
+                if route_id == CONTINUOUS_EXPLORATION_ID
+                else plan_route(
+                    frames,
+                    rover_speed_kmh=rover_speed,
+                    connections=route_connections,
+                    start_waypoint_id=scenario.station_ids[0],
+                )
             )
             assert_route_constraints(
                 segments,
@@ -1130,17 +1136,14 @@ def render_solar_rover_planner() -> None:
 
     source_label = stored_plan["source_label"]
     scenario = get_route_scenario(stored_plan["config"][2])
-    route_connections = (
-        CONNECTIONS
-        if scenario.id == DYNAMIC_ROUTE_ID
-        else ((scenario.station_ids[0], scenario.station_ids[1]),)
-    )
+    route_connections = CONNECTIONS
     payload = build_component_payload(
         stored_plan["frames"],
         stored_plan["segments"],
         source_label=source_label,
         rover_speed_kmh=stored_plan["config"][4],
         map_url=static_asset_url("lola-shackleton-hillshade.webp"),
+        overview_url=static_asset_url("shackleton-lroc.png"),
         route_scenario=scenario,
         connections=route_connections,
     )
@@ -1150,11 +1153,16 @@ def render_solar_rover_planner() -> None:
             stored_plan["fallback_note"],
             icon=":material/cloud_off:",
         )
-    else:
-        st.caption(
-            f"{source_label} · published NASA stations · east-positive longitude · "
-            "geometric visibility only · graph links are not validated traverses."
-        )
+    mode_note = (
+        "DEMONSTRATION MODE — cyclic station exploration; no optimality or "
+        "terrain-safety claim."
+        if scenario.id == CONTINUOUS_EXPLORATION_ID
+        else "SCIENTIFIC MODE — movement decisions use geometric Horizons visibility."
+    )
+    st.caption(
+        f"{source_label} · published NASA stations · east-positive longitude · "
+        f"{mode_note} Graph links are not validated traverses."
+    )
 
 
 def render_mission_control(sites: list[dict]) -> None:
