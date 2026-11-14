@@ -81,6 +81,12 @@ def test_dashboard_assets_and_streamlit_theme_are_packaged():
     assert "enableStaticServing = true" in config
     assert 'base = "dark"' in config
 
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert 'url("app/static/assets/lunar-sidebar.png")' in source
+    assert 'url("app/static/assets/lunar-hero.png")' in source
+    assert 'src="app/static/assets/lunar-crescent.png"' in source
+    assert '"/app/static/assets/' not in source
+
 
 def test_live_network_error_falls_back_to_demo_charts():
     with patch(

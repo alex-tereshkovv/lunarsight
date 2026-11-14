@@ -1,5 +1,7 @@
 # LunarSight
 
+## [OPEN LUNARSIGHT — LIVE DEMO](https://lunarsight.streamlit.app/)
+
 **Lunar South Pole Landing Site Navigator**
 
 LunarSight is an interactive Streamlit application for comparing the apparent
