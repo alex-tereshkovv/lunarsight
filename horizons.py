@@ -39,6 +39,10 @@ class HorizonsResponseError(HorizonsError):
 
 def validate_ephemeris(frame: pd.DataFrame) -> pd.DataFrame:
     """Return a validated copy with UTC timestamps and numeric angles."""
+    if frame.empty:
+        raise EphemerisValidationError(
+            "Ephemeris table must contain at least one observation"
+        )
     missing = [column for column in EPHEMERIS_COLUMNS if column not in frame.columns]
     if missing:
         raise EphemerisValidationError(f"Missing columns: {', '.join(missing)}")

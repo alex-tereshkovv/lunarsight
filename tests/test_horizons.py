@@ -104,3 +104,43 @@ def test_fetch_translates_network_errors():
 def test_parser_rejects_missing_data_markers():
     with pytest.raises(HorizonsResponseError, match="markers"):
         parse_observer_result("no table", "earth")
+
+
+def test_parser_rejects_empty_ephemeris_section():
+    with pytest.raises(HorizonsResponseError, match="empty ephemeris"):
+        parse_observer_result("$$SOE\n\n$$EOE", "sun")
+
+
+def test_fetch_rejects_horizons_error_payload():
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    session = FakeSession([{"error": "invalid observer"}])
+    with pytest.raises(HorizonsResponseError, match="invalid observer"):
+        fetch_target_ephemeris(
+            "earth",
+            -89.4,
+            45.0,
+            start,
+            start + timedelta(hours=1),
+            session=session,
+        )
+
+
+def test_fetch_rejects_invalid_json():
+    class InvalidJsonResponse(FakeResponse):
+        def json(self):
+            raise ValueError("not json")
+
+    class InvalidJsonSession:
+        def get(self, *args, **kwargs):
+            return InvalidJsonResponse(None)
+
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with pytest.raises(HorizonsResponseError, match="invalid JSON"):
+        fetch_target_ephemeris(
+            "sun",
+            -89.4,
+            45.0,
+            start,
+            start + timedelta(hours=1),
+            session=InvalidJsonSession(),
+        )

@@ -6,11 +6,15 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+*.log
+*.tmp
 .venv/
+.venv-*/
 venv/
 .env
 .env.*
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 .vscode/
 .idea/
 .DS_Store
