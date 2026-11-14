@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -66,6 +67,19 @@ def test_position_interpolation_is_smooth_and_heading_matches_motion():
     assert middle[0] == pytest.approx((start[0] + end[0]) / 2)
     assert middle[1] == pytest.approx((start[1] + end[1]) / 2)
     assert middle[2] == pytest.approx(start[2]) == pytest.approx(end[2])
+
+
+def test_screen_heading_uses_rover_local_positive_x_forward_axis():
+    origin = replace(WAYPOINTS[0], map_x=0.0, map_y=0.0)
+    east = replace(WAYPOINTS[1], map_x=1.0, map_y=0.0)
+    south = replace(WAYPOINTS[1], map_x=0.0, map_y=1.0)
+    west = replace(WAYPOINTS[1], map_x=-1.0, map_y=0.0)
+    north = replace(WAYPOINTS[1], map_x=0.0, map_y=-1.0)
+
+    assert interpolate_position(origin, east, 0.5)[2] == pytest.approx(0.0)
+    assert interpolate_position(origin, south, 0.5)[2] == pytest.approx(90.0)
+    assert interpolate_position(origin, west, 0.5)[2] == pytest.approx(180.0)
+    assert interpolate_position(origin, north, 0.5)[2] == pytest.approx(270.0)
 
 
 def test_dual_visibility_requires_both_object_centres_above_zero():
