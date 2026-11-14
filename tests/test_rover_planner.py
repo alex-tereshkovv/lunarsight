@@ -10,6 +10,7 @@ from horizons import EphemerisValidationError
 from horizons import load_ephemeris_csv
 from rover_planner import (
     CONNECTIONS,
+    CONTINUOUS_EXPLORATION_ID,
     DEFAULT_ROUTE_ID,
     DYNAMIC_ROUTE_ID,
     SOURCE_NASA_CACHED,
@@ -24,6 +25,7 @@ from rover_planner import (
     get_route_scenario,
     interpolate_fraction,
     interpolate_position,
+    plan_continuous_exploration,
     plan_route,
     route_state_at,
 )
@@ -137,6 +139,46 @@ def test_dynamic_graph_contains_all_verified_stations_and_is_connected():
     dynamic = get_route_scenario(DYNAMIC_ROUTE_ID)
     assert set(dynamic.station_ids) == station_ids
     assert dynamic.official_traverse_length_km is None
+
+
+def test_continuous_exploration_is_closed_connected_and_speed_limited():
+    frames = synthetic_frames(days=7)
+    segments = plan_continuous_exploration(frames, rover_speed_kmh=0.2)
+
+    assert any(segment.moving for segment in segments)
+    assert segments[0].from_id == segments[-1].to_id == "CR1"
+    assert_route_constraints(
+        segments,
+        rover_speed_kmh=0.2,
+        connections=CONNECTIONS,
+    )
+    allowed = {frozenset(connection) for connection in CONNECTIONS}
+    assert all(
+        frozenset((segment.from_id, segment.to_id)) in allowed
+        for segment in segments
+        if segment.moving
+    )
+    assert all(
+        "not a terrain-validated traverse" in segment.reason
+        for segment in segments
+        if segment.moving
+    )
+
+
+def test_extended_continuous_exploration_visits_all_stations_without_shortcuts():
+    frames = synthetic_frames(days=28)
+    segments = plan_continuous_exploration(frames, rover_speed_kmh=0.2)
+    visited = {
+        station_id
+        for segment in segments
+        for station_id in (segment.from_id, segment.to_id)
+    }
+
+    assert visited == {waypoint.id for waypoint in WAYPOINTS}
+    assert sum(segment.moving for segment in segments) > 10
+    assert segments[0].start_utc == frames["CR1"]["time_utc"].iloc[0]
+    assert segments[-1].end_utc == frames["CR1"]["time_utc"].iloc[-1]
+    assert segments[0].from_id == segments[-1].to_id == "CR1"
 
 
 def test_dynamic_planner_can_cross_an_unfavourable_station_for_future_gain():
@@ -262,6 +304,40 @@ def test_dynamic_payload_exposes_all_stations_and_only_conceptual_links():
     assert len(payload["waypoints"]) == 7
     assert payload["connections"] == [list(edge) for edge in CONNECTIONS]
     assert "not the NASA traverse polyline" in payload["terrain_note"]
+
+
+def test_exploration_payload_is_explicitly_demo_closed_and_georeferenced():
+    frames = synthetic_frames(days=7)
+    segments = plan_continuous_exploration(frames, rover_speed_kmh=0.2)
+    payload = build_component_payload(
+        frames,
+        segments,
+        source_label=SOURCE_NASA_CACHED,
+        rover_speed_kmh=0.2,
+        map_url="map.png",
+        overview_url="overview.png",
+        route_scenario=get_route_scenario(CONTINUOUS_EXPLORATION_ID),
+    )
+
+    assert payload["route"]["label"] == "Continuous Exploration"
+    assert payload["route"]["mode_kind"] == "exploration"
+    assert payload["route"]["loop_playback_default"] is True
+    assert payload["route"]["closed_at_boundary"] is True
+    assert payload["route"]["spotlight_label"] == "Exploration Destination"
+    assert payload["route"]["excluded_station_ids"] == ["CR2", "CR3"]
+    assert payload["overview_url"] == "overview.png"
+    assert payload["shackleton"]["inside_route_crop"] is False
+    assert payload["shackleton"]["longitude_deg_east"] == pytest.approx(129.78)
+
+
+def test_synthetic_fixture_supports_all_planner_period_options():
+    frame = build_synthetic_ephemerides(
+        WAYPOINTS[0], date(2026, 3, 14), 60, step_hours=3
+    )
+    assert len(frame) == 60 * 8 + 1
+    assert frame["time_utc"].iloc[-1] - frame["time_utc"].iloc[0] == timedelta(
+        days=60
+    )
 
 
 def test_bundled_nasa_cache_is_complete_aligned_and_explicitly_manifested():

@@ -10,7 +10,7 @@ hazards, wheel slip, or communications link performance.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from math import asin, atan2, ceil, cos, degrees, radians, sin, sqrt
 from typing import Final, Mapping, Sequence
 
@@ -20,8 +20,15 @@ from horizons import EPHEMERIS_COLUMNS, EphemerisValidationError, validate_ephem
 from rover_geo import (
     LOLA_LOCAL_DEM_URL,
     LUNAR_SURFACE_DATA_BOOK_URL,
+    SHACKLETON_CENTER_LATITUDE_DEG,
+    SHACKLETON_CENTER_LONGITUDE_DEG_EAST,
+    SHACKLETON_DIAMETER_KM,
+    SHACKLETON_FEATURE_URL,
+    SHACKLETON_OVERVIEW_URL,
     VERIFIED_STATIONS,
     scale_bar_fraction,
+    shackleton_map_position,
+    shackleton_within_map,
     station_map_position,
 )
 
@@ -110,10 +117,18 @@ DEFAULT_ROUTE_ID: Final = "CR1_SR1"
 DYNAMIC_ROUTE_ID: Final = "DYNAMIC_VISIBILITY"
 DYNAMIC_ROUTE_SCENARIO: Final = RoverRouteScenario(
     DYNAMIC_ROUTE_ID,
-    "Dynamic Visibility Optimization",
+    "Visibility Optimization",
     tuple(waypoint.id for waypoint in WAYPOINTS),
     None,
     "Verified stations from NASA M2M-30044; conceptual links are not published traverses",
+)
+CONTINUOUS_EXPLORATION_ID: Final = "CONTINUOUS_EXPLORATION"
+CONTINUOUS_EXPLORATION_SCENARIO: Final = RoverRouteScenario(
+    CONTINUOUS_EXPLORATION_ID,
+    "Continuous Exploration",
+    tuple(waypoint.id for waypoint in WAYPOINTS),
+    None,
+    "Demonstration-only closed walk on conceptual verified-station links",
 )
 # These edges form a transparent planning graph between published stations.  They
 # are display/planning links only: the Moon has not signed off on our shortcuts.
@@ -126,12 +141,23 @@ CONNECTIONS: Final[tuple[tuple[str, str], ...]] = (
     ("SR1", "PSR1"),
     ("SR3", "PSR1"),
 )
+EXPLORATION_WALKS: Final[tuple[tuple[str, ...], ...]] = (
+    (
+        "CR1", "CR2", "CR3", "CR2", "CR1", "SR1",
+        "SR2", "SR3", "PSR1", "SR1", "CR1",
+    ),
+    ("CR1", "SR1", "SR2", "SR3", "PSR1", "SR1", "CR1"),
+    ("CR1", "CR2", "CR3", "CR2", "CR1"),
+    ("CR1", "CR2", "CR1"),
+)
 
 
 def get_route_scenario(route_id: str) -> RoverRouteScenario:
     """Return one supported NASA endpoint scenario."""
     if route_id == DYNAMIC_ROUTE_ID:
         return DYNAMIC_ROUTE_SCENARIO
+    if route_id == CONTINUOUS_EXPLORATION_ID:
+        return CONTINUOUS_EXPLORATION_SCENARIO
     try:
         return next(item for item in ROUTE_SCENARIOS if item.id == route_id)
     except StopIteration as error:
@@ -193,8 +219,8 @@ def build_synthetic_ephemerides(
     The curves are deterministic visual fixtures, not an astronomical model and
     never carry a NASA provenance label.
     """
-    if duration_days not in (7, 14, 28):
-        raise ValueError("duration_days must be 7, 14, or 28")
+    if duration_days not in (7, 14, 28, 60):
+        raise ValueError("duration_days must be 7, 14, 28, or 60")
     if step_hours < 1:
         raise ValueError("step_hours must be positive")
     start = pd.Timestamp(start_date, tz="UTC")
@@ -379,6 +405,114 @@ def plan_route(
     return _merge_stationary_segments(segments)
 
 
+def plan_continuous_exploration(
+    ephemerides: Mapping[str, pd.DataFrame],
+    *,
+    rover_speed_kmh: float,
+    waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
+    connections: Sequence[tuple[str, str]] = CONNECTIONS,
+    pause_hours: float = 0.5,
+    turn_allowance_hours: float = 0.25,
+) -> list[RouteSegment]:
+    """Build repeating closed demonstration walks without inventing shortcuts.
+
+    The longest predefined closed walk that physically fits the observation
+    period is selected. Every leg is an explicit conceptual graph edge; the
+    rover returns to CR1 before another cycle starts, so looped playback has no
+    position discontinuity. Ephemerides are validated but do not influence this
+    demonstration-only route.
+    """
+    if rover_speed_kmh <= 0:
+        raise ValueError("rover_speed_kmh must be positive")
+    if pause_hours < 0 or turn_allowance_hours < 0:
+        raise ValueError("exploration timing values must not be negative")
+    frames = validate_waypoint_ephemerides(ephemerides, waypoints)
+    waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
+    allowed = {frozenset(edge) for edge in connections}
+    start_time = frames[waypoints[0].id]["time_utc"].iloc[0].to_pydatetime()
+    end_time = frames[waypoints[0].id]["time_utc"].iloc[-1].to_pydatetime()
+    available_hours = (end_time - start_time).total_seconds() / 3600.0
+
+    def walk_duration_hours(walk: Sequence[str]) -> float:
+        return sum(
+            great_circle_distance_km(waypoint_by_id[first], waypoint_by_id[second])
+            / rover_speed_kmh
+            + turn_allowance_hours
+            + pause_hours
+            for first, second in zip(walk, walk[1:])
+        )
+
+    selected: tuple[str, ...] | None = None
+    for walk in EXPLORATION_WALKS:
+        if any(frozenset(edge) not in allowed for edge in zip(walk, walk[1:])):
+            continue
+        if walk[0] != walk[-1]:
+            raise ValueError("exploration walks must be closed")
+        if walk_duration_hours(walk) <= available_hours + 1e-9:
+            selected = walk
+            break
+
+    if selected is None:
+        return [RouteSegment(
+            start_time,
+            end_time,
+            "CR1",
+            "CR1",
+            0.0,
+            False,
+            "Remain stationary: no closed conceptual exploration walk fits the period.",
+        )]
+
+    segments: list[RouteSegment] = []
+    cursor = start_time
+    cycle_index = 1
+    cycle_duration = timedelta(hours=walk_duration_hours(selected))
+    while cursor + cycle_duration <= end_time + timedelta(microseconds=1):
+        for first, second in zip(selected, selected[1:]):
+            distance = great_circle_distance_km(
+                waypoint_by_id[first], waypoint_by_id[second]
+            )
+            drive_end = cursor + timedelta(
+                hours=distance / rover_speed_kmh + turn_allowance_hours
+            )
+            segments.append(RouteSegment(
+                cursor,
+                drive_end,
+                first,
+                second,
+                distance,
+                True,
+                f"Conceptual Exploration Loop {cycle_index}: travel to {second}. "
+                "This graph edge is not a terrain-validated traverse.",
+            ))
+            cursor = drive_end
+            if pause_hours:
+                pause_end = cursor + timedelta(hours=pause_hours)
+                segments.append(RouteSegment(
+                    cursor,
+                    pause_end,
+                    second,
+                    second,
+                    0.0,
+                    False,
+                    f"Demonstration pause at verified station {second}.",
+                ))
+                cursor = pause_end
+        cycle_index += 1
+
+    if cursor < end_time:
+        segments.append(RouteSegment(
+            cursor,
+            end_time,
+            selected[0],
+            selected[0],
+            0.0,
+            False,
+            "Exploration cycles complete; remain at the start station until period end.",
+        ))
+    return _merge_stationary_segments(segments)
+
+
 def route_state_at(
     moment: datetime,
     segments: Sequence[RouteSegment],
@@ -431,6 +565,7 @@ def build_component_payload(
     source_label: str,
     rover_speed_kmh: float,
     map_url: str,
+    overview_url: str = "",
     route_scenario: RoverRouteScenario | None = None,
     waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
     connections: Sequence[tuple[str, str]] = CONNECTIONS,
@@ -442,6 +577,18 @@ def build_component_payload(
     scenario = route_scenario or get_route_scenario(DEFAULT_ROUTE_ID)
     waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
     times = frames[waypoints[0].id]["time_utc"]
+    used_ids = {
+        station_id
+        for segment in segments
+        for station_id in (segment.from_id, segment.to_id)
+    }
+    visited_station_ids = [
+        waypoint.id for waypoint in waypoints if waypoint.id in used_ids
+    ]
+    excluded_station_ids = [
+        waypoint.id for waypoint in waypoints if waypoint.id not in used_ids
+    ]
+    exploration_mode = scenario.id == CONTINUOUS_EXPLORATION_ID
 
     states: list[dict[str, object]] = []
     for row_index, timestamp in enumerate(times):
@@ -499,6 +646,7 @@ def build_component_payload(
         ),
         "rover_speed_kmh": rover_speed_kmh,
         "map_url": map_url,
+        "overview_url": overview_url,
         "map_credit": "NASA/GSFC PGDA — LOLA Site01 + Site04, 5 m/pixel DEM",
         "map_source_url": LOLA_LOCAL_DEM_URL,
         "spatial_note": (
@@ -511,9 +659,37 @@ def build_component_payload(
             "traverse length, or a terrain-safe route."
         ),
         "station_source_url": LUNAR_SURFACE_DATA_BOOK_URL,
+        "shackleton": {
+            "name": "Shackleton Crater",
+            "latitude_deg": SHACKLETON_CENTER_LATITUDE_DEG,
+            "longitude_deg_east": SHACKLETON_CENTER_LONGITUDE_DEG_EAST,
+            "diameter_km": SHACKLETON_DIAMETER_KM,
+            "map_x": shackleton_map_position()[0],
+            "map_y": shackleton_map_position()[1],
+            "inside_route_crop": shackleton_within_map(),
+            "feature_source_url": SHACKLETON_FEATURE_URL,
+            "overview_source_url": SHACKLETON_OVERVIEW_URL,
+            "overview_note": (
+                "NASA multi-temporal LROC overview; not the route-map scale and "
+                "not timestamp-specific illumination."
+            ),
+        },
         "scale_bar": {"distance_km": 2.0, "fraction": scale_bar_fraction(2.0)},
         "route": {
             **asdict(scenario),
+            "mode_kind": "exploration" if exploration_mode else "visibility",
+            "visited_station_ids": visited_station_ids,
+            "excluded_station_ids": excluded_station_ids,
+            "spotlight_label": (
+                "Exploration Destination"
+                if exploration_mode
+                else "Recommended Candidate Zone"
+            ),
+            "loop_playback_default": exploration_mode,
+            "closed_at_boundary": bool(
+                segments
+                and segments[0].from_id == segments[-1].to_id
+            ),
             "display_connector_length_km": sum(
                 segment.distance_km for segment in segments if segment.moving
             ),

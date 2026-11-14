@@ -5,9 +5,14 @@ import pytest
 
 from rover_geo import (
     MAP_BOUNDS_M,
+    SHACKLETON_CENTER_LATITUDE_DEG,
+    SHACKLETON_CENTER_LONGITUDE_DEG_EAST,
+    SHACKLETON_FEATURE_URL,
     VERIFIED_STATIONS,
     project_south_polar_stereographic,
     scale_bar_fraction,
+    shackleton_map_position,
+    shackleton_within_map,
     station_map_position,
     stations_within_map,
 )
@@ -51,6 +56,16 @@ def test_scale_bar_is_derived_from_projected_map_width():
     assert scale_bar_fraction(2.0) == pytest.approx(2000.0 / (x_max - x_min))
 
 
+def test_shackleton_label_is_not_misplaced_inside_the_route_crop():
+    map_x, map_y = shackleton_map_position()
+    assert SHACKLETON_CENTER_LATITUDE_DEG == pytest.approx(-89.67)
+    assert SHACKLETON_CENTER_LONGITUDE_DEG_EAST == pytest.approx(129.78)
+    assert map_x > 1.0
+    assert 0.0 <= map_y <= 1.0
+    assert shackleton_within_map() is False
+    assert SHACKLETON_FEATURE_URL.endswith("/Feature/5450")
+
+
 def test_committed_hillshade_manifest_records_projection_and_processing():
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads(
@@ -67,3 +82,10 @@ def test_committed_hillshade_manifest_records_projection_and_processing():
     }
     assert "not timestamp-specific illumination" in manifest["processing"]
     assert (root / "static" / "assets" / manifest["image"]).is_file()
+    overview = manifest["shackleton_overview"]
+    assert overview["control_network_center"] == {
+        "latitude_deg": -89.67,
+        "longitude_deg_east": 129.78,
+    }
+    assert "Separate-scale" in overview["note"]
+    assert (root / "static" / "assets" / overview["image"]).is_file()

@@ -18,12 +18,12 @@ def test_animation_is_client_side_smooth_and_rotates_wheels():
     assert "ROVER_LOCAL_FORWARD_DEG=90" in _JS
     assert "Math.atan2(to.y-from.y,to.x-from.x)" in _JS
     assert "roverRotation(pose.heading)" in _JS
-    assert "pose.travelledKm*1000" in _JS
+    assert "distanceKm=pose.travelledKm+loopDistanceKm" in _JS
     assert "WHEEL_RADIUS_METRES" in _JS
     assert "WHEEL_TRACK_METRES" in _JS
     assert _HTML.count('class="wheel-spinner"') == 6
     assert _HTML.count('class="wheel-tread"') == 6
-    assert 'id="rover-model" transform="scale(.31)"' in _HTML
+    assert 'id="rover-model" transform="scale(.27)"' in _HTML
     assert 'data-forward-axis="positive-y"' in _HTML
     assert "Streamlit.setComponentValue" not in _JS
     assert "window.parent.postMessage" not in _JS
@@ -50,6 +50,34 @@ def test_all_visual_state_uses_one_mission_timestamp():
     assert "wheelSpinners.forEach" in _JS
 
 
+def test_loop_playback_is_closed_route_only_and_reuses_mission_clock():
+    assert 'id="loop-toggle"' in _HTML
+    assert "data.route.closed_at_boundary" in _JS
+    assert "missionMs=data.startMs+(missionMs-data.startMs)%" in _JS
+    assert "loopDistanceKm+=missionDistanceKm" in _JS
+    assert "missionMs=data.startMs" in _JS
+    assert "setInterval" not in _JS
+
+
+def test_repeated_exploration_edges_render_once_without_position_shortcuts():
+    assert "const movingByEdge=new Map()" in _JS
+    assert "movingByEdge.forEach" in _JS
+    assert "buildRouteGeometry(byId[segment.from_id],byId[segment.to_id])" in _JS
+    assert "item.segments.forEach" in _JS
+    assert "networkLayer.replaceChildren()" in _JS
+    assert "q('#earth-bands').replaceChildren()" in _JS
+    assert "curvedRoute" not in _JS
+
+
+def test_shackleton_uses_separate_overview_when_outside_route_crop():
+    assert 'id="shackleton-main-label"' in _HTML
+    assert 'id="shackleton-overview"' in _HTML
+    assert "REGIONAL OVERVIEW · SEPARATE SCALE" in _HTML
+    assert "data.shackleton.inside_route_crop" in _JS
+    assert "mainCraterLabel.setAttribute('opacity','0')" in _JS
+    assert "overview.removeAttribute('display')" in _JS
+
+
 def test_spotlight_remains_explicitly_conceptual():
     assert "Recommended Candidate Zone" in _HTML
     assert 'id="candidate-spotlight"' in _HTML
@@ -57,3 +85,5 @@ def test_spotlight_remains_explicitly_conceptual():
     assert ".spotlight-bloom" in _CSS
     assert "Conceptual visualization." in _HTML
     assert "No terrain shadows" in _HTML
+    assert 'id="spotlight-label-text"' in _HTML
+    assert "data.route.spotlight_label" in _JS
