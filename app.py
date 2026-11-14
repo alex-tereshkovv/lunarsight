@@ -27,7 +27,8 @@ from horizons import (
 )
 from rover_component import solar_rover_simulation
 from rover_planner import (
-    DEFAULT_ROUTE_ID,
+    CONNECTIONS,
+    DYNAMIC_ROUTE_ID,
     ROUTE_SCENARIOS,
     SOURCE_NASA_CACHED,
     SOURCE_NASA_LIVE,
@@ -999,15 +1000,15 @@ def render_solar_rover_planner() -> None:
             )
         with route_col:
             route_id = st.selectbox(
-                "NASA Scenario",
-                [scenario.id for scenario in ROUTE_SCENARIOS],
-                index=next(
-                    index
-                    for index, scenario in enumerate(ROUTE_SCENARIOS)
-                    if scenario.id == DEFAULT_ROUTE_ID
-                ),
+                "Planning Mode",
+                [DYNAMIC_ROUTE_ID, *[scenario.id for scenario in ROUTE_SCENARIOS]],
+                index=0,
                 format_func=lambda value: get_route_scenario(value).label,
                 key="rover_route",
+                help=(
+                    "Dynamic mode evaluates all seven verified stations over one "
+                    "shared UTC timeline. Links are conceptual, not terrain-validated."
+                ),
             )
         with source_col:
             data_source = st.selectbox(
@@ -1083,7 +1084,11 @@ def render_solar_rover_planner() -> None:
                 )
                 actual_source = SOURCE_NASA_CACHED
             scenario = get_route_scenario(route_id)
-            route_connections = (scenario.station_ids,)
+            route_connections = (
+                CONNECTIONS
+                if route_id == DYNAMIC_ROUTE_ID
+                else ((scenario.station_ids[0], scenario.station_ids[1]),)
+            )
             segments = plan_route(
                 frames,
                 rover_speed_kmh=rover_speed,
@@ -1125,7 +1130,11 @@ def render_solar_rover_planner() -> None:
 
     source_label = stored_plan["source_label"]
     scenario = get_route_scenario(stored_plan["config"][2])
-    route_connections = (scenario.station_ids,)
+    route_connections = (
+        CONNECTIONS
+        if scenario.id == DYNAMIC_ROUTE_ID
+        else ((scenario.station_ids[0], scenario.station_ids[1]),)
+    )
     payload = build_component_payload(
         stored_plan["frames"],
         stored_plan["segments"],
@@ -1144,7 +1153,7 @@ def render_solar_rover_planner() -> None:
     else:
         st.caption(
             f"{source_label} · published NASA stations · east-positive longitude · "
-            "geometric visibility only · dashed link is not a validated traverse."
+            "geometric visibility only · graph links are not validated traverses."
         )
 
 
