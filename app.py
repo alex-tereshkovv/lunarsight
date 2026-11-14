@@ -30,6 +30,18 @@ ROOT = Path(__file__).resolve().parent
 MIN_OBSERVATION_DATE = date(2000, 1, 1)
 MAX_OBSERVATION_DATE = date(2100, 12, 31)
 
+
+def static_asset_url(filename: str, app_url: str | None = None) -> str:
+    """Return a static URL that works locally and behind Community Cloud proxy."""
+    if app_url is None:
+        app_url = str(st.context.url or "")
+    prefix = (
+        "/~/+/app/static/assets"
+        if ".streamlit.app" in app_url.lower()
+        else "/app/static/assets"
+    )
+    return f"{prefix}/{filename}"
+
 COLORS = {
     "background": "#07111F",
     "panel": "#101E32",
@@ -1107,8 +1119,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
+dashboard_styles = """
     <style>
     :root {
       --bg: #07111F;
@@ -1141,7 +1152,7 @@ st.markdown(
     [data-testid="stSidebar"] {
       background:
         linear-gradient(180deg, rgba(4,14,27,.99) 0%, rgba(5,18,33,.96) 43%, rgba(4,15,28,.56) 72%, rgba(3,10,20,.2) 100%),
-        url("app/static/assets/lunar-sidebar.png") center bottom / cover no-repeat;
+        url("__LUNAR_SIDEBAR_ASSET__") center bottom / cover no-repeat;
       border-right: 1px solid #173754;
       box-shadow: 8px 0 30px rgba(0,0,0,.28);
       min-width: 238px;
@@ -1221,7 +1232,7 @@ st.markdown(
       border-radius: 0 0 12px 12px;
       background:
         linear-gradient(90deg, rgba(3,12,24,.95) 0%, rgba(3,12,24,.76) 35%, rgba(3,12,24,.42) 67%, rgba(3,12,24,.76) 100%),
-        url("app/static/assets/lunar-hero.png") center 61% / cover no-repeat;
+        url("__LUNAR_HERO_ASSET__") center 61% / cover no-repeat;
       box-shadow: inset 0 -28px 42px rgba(3,10,20,.76);
     }
     .mission-hero > div { position: relative; z-index: 1; }
@@ -1467,17 +1478,21 @@ st.markdown(
       .status-bar span { display: block; border: none; padding: .18rem 0; }
     }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """
+dashboard_styles = dashboard_styles.replace(
+    "__LUNAR_SIDEBAR_ASSET__", static_asset_url("lunar-sidebar.png")
+).replace(
+    "__LUNAR_HERO_ASSET__", static_asset_url("lunar-hero.png")
 )
+st.markdown(dashboard_styles, unsafe_allow_html=True)
 
 sites = load_sites()
 
 with st.sidebar:
     st.markdown(
-        """
+        f"""
         <div class="sidebar-brand">
-          <img class="moon-mark" src="app/static/assets/lunar-crescent.png"
+          <img class="moon-mark" src="{static_asset_url('lunar-crescent.png')}"
                alt="Crescent Moon">
           <div>
             <div class="brand-title"><span>Lunar</span>Sight</div>
