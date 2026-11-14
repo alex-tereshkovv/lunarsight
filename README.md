@@ -152,13 +152,24 @@ zero-degree local horizon:
 - `.streamlit/config.toml` — theme and static-serving configuration.
 - `tests/` — offline unit and Streamlit regression tests.
 
-## Team contributions
+## Team Contributions
 
-- **Developer 1:** architecture, Horizons integration, Streamlit application,
-  deployment, and integration.
-- **Developer 2:** mission-analysis calculations and visibility windows.
-- **Developer 3:** landing-site research, scientific documentation,
-  validation, and presentation.
+LunarSight was developed by a two-person team.
 
-Contributions should be developed in focused branches and reviewed before
-being promoted to the stable deployment branch.
+### Alexandr Tereshkov — Team Lead & Lead Developer
+
+- Project leadership and technical decision-making.
+- Software architecture and system design.
+- Core Python development and implementation.
+- NASA JPL Horizons API integration.
+- Streamlit application development.
+- Scientific data processing and system integration.
+- Testing, debugging, GitHub management, and cloud deployment.
+
+### Ramazan Kabayev — Research & Documentation
+
+- Research into lunar South Pole exploration and NASA mission requirements.
+- Collection and analysis of scientific sources.
+- Preparation of research materials and documentation.
+- Development of the project presentation.
+- Preparation of the official NASA Space Apps Project Page.
