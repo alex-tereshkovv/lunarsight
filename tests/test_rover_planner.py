@@ -11,6 +11,7 @@ from horizons import load_ephemeris_csv
 from rover_planner import (
     CONNECTIONS,
     DEFAULT_ROUTE_ID,
+    DYNAMIC_ROUTE_ID,
     SOURCE_NASA_CACHED,
     SOURCE_NASA_LIVE,
     SOURCE_SYNTHETIC,
@@ -116,6 +117,51 @@ def test_route_segments_are_continuous_connected_and_speed_limited():
     )
 
 
+def test_dynamic_graph_contains_all_verified_stations_and_is_connected():
+    station_ids = {waypoint.id for waypoint in WAYPOINTS}
+    connected_ids = {station_id for edge in CONNECTIONS for station_id in edge}
+    assert connected_ids == station_ids
+    assert len(CONNECTIONS) == len(set(map(frozenset, CONNECTIONS)))
+
+    reached = {"CR1"}
+    while True:
+        expanded = reached | {
+            second if first in reached else first
+            for first, second in CONNECTIONS
+            if first in reached or second in reached
+        }
+        if expanded == reached:
+            break
+        reached = expanded
+    assert reached == station_ids
+    dynamic = get_route_scenario(DYNAMIC_ROUTE_ID)
+    assert set(dynamic.station_ids) == station_ids
+    assert dynamic.official_traverse_length_km is None
+
+
+def test_dynamic_planner_can_cross_an_unfavourable_station_for_future_gain():
+    periods = 18
+    frames = {
+        waypoint.id: constant_frame(-3.0, -2.0, periods=periods)
+        for waypoint in WAYPOINTS
+    }
+    frames["SR2"] = constant_frame(3.0, 2.0, periods=periods)
+    segments = plan_route(
+        frames,
+        rover_speed_kmh=0.5,
+        connections=(("CR1", "SR1"), ("SR1", "SR2")),
+        start_waypoint_id="CR1",
+    )
+    moves = [(item.from_id, item.to_id) for item in segments if item.moving]
+    assert moves[:2] == [("CR1", "SR1"), ("SR1", "SR2")]
+    assert_route_constraints(
+        segments,
+        rover_speed_kmh=0.5,
+        connections=(("CR1", "SR1"), ("SR1", "SR2")),
+    )
+    assert all("conceptual link" in item.reason for item in segments if item.moving)
+
+
 def test_route_state_moves_continuously_inside_a_segment():
     first, second = WAYPOINTS[0], WAYPOINTS[1]
     start = datetime(2026, 3, 14, tzinfo=timezone.utc)
@@ -197,6 +243,25 @@ def test_unknown_source_cannot_be_silently_presented_as_nasa():
             rover_speed_kmh=0.2,
             map_url="map.png",
         )
+
+
+def test_dynamic_payload_exposes_all_stations_and_only_conceptual_links():
+    frames = synthetic_frames(days=7)
+    segments = plan_route(frames, rover_speed_kmh=0.2)
+    payload = build_component_payload(
+        frames,
+        segments,
+        source_label=SOURCE_NASA_CACHED,
+        rover_speed_kmh=0.2,
+        map_url="map.png",
+        route_scenario=get_route_scenario(DYNAMIC_ROUTE_ID),
+        connections=CONNECTIONS,
+    )
+    assert payload["route"]["id"] == DYNAMIC_ROUTE_ID
+    assert payload["route"]["official_traverse_length_km"] is None
+    assert len(payload["waypoints"]) == 7
+    assert payload["connections"] == [list(edge) for edge in CONNECTIONS]
+    assert "not the NASA traverse polyline" in payload["terrain_note"]
 
 
 def test_bundled_nasa_cache_is_complete_aligned_and_explicitly_manifested():

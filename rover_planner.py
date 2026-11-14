@@ -10,7 +10,7 @@ hazards, wheel slip, or communications link performance.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from math import asin, atan2, ceil, cos, degrees, radians, sin, sqrt
 from typing import Final, Mapping, Sequence
 
@@ -63,8 +63,8 @@ class RoverRouteScenario:
 
     id: str
     label: str
-    station_ids: tuple[str, str]
-    official_traverse_length_km: float
+    station_ids: tuple[str, ...]
+    official_traverse_length_km: float | None
     source_pages: str
 
 
@@ -107,13 +107,31 @@ ROUTE_SCENARIOS: Final[tuple[RoverRouteScenario, ...]] = (
     ),
 )
 DEFAULT_ROUTE_ID: Final = "CR1_SR1"
+DYNAMIC_ROUTE_ID: Final = "DYNAMIC_VISIBILITY"
+DYNAMIC_ROUTE_SCENARIO: Final = RoverRouteScenario(
+    DYNAMIC_ROUTE_ID,
+    "Dynamic Visibility Optimization",
+    tuple(waypoint.id for waypoint in WAYPOINTS),
+    None,
+    "Verified stations from NASA M2M-30044; conceptual links are not published traverses",
+)
+# These edges form a transparent planning graph between published stations.  They
+# are display/planning links only: the Moon has not signed off on our shortcuts.
 CONNECTIONS: Final[tuple[tuple[str, str], ...]] = (
-    ROUTE_SCENARIOS[0].station_ids,
+    ("CR1", "CR2"),
+    ("CR2", "CR3"),
+    ("CR1", "SR1"),
+    ("SR1", "SR2"),
+    ("SR2", "SR3"),
+    ("SR1", "PSR1"),
+    ("SR3", "PSR1"),
 )
 
 
 def get_route_scenario(route_id: str) -> RoverRouteScenario:
     """Return one supported NASA endpoint scenario."""
+    if route_id == DYNAMIC_ROUTE_ID:
+        return DYNAMIC_ROUTE_SCENARIO
     try:
         return next(item for item in ROUTE_SCENARIOS if item.id == route_id)
     except StopIteration as error:
@@ -247,18 +265,22 @@ def plan_route(
     waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
     connections: Sequence[tuple[str, str]] = CONNECTIONS,
     start_waypoint_id: str = "CR1",
-    minimum_gain_hours: float = 3.0,
+    minimum_gain_hours: float = 0.25,
+    turn_allowance_hours: float = 0.25,
 ) -> list[RouteSegment]:
-    """Build an explainable route with travel-time and connectivity constraints.
+    """Optimize cumulative geometric dual visibility on a time-expanded graph.
 
-    At each available decision sample, the rover compares the remaining dual-
-    visibility run at its current node with connected nodes after their travel
-    time.  A move is selected only when its usable future window exceeds the
-    stay option by ``minimum_gain_hours``.  This intentionally conservative
-    heuristic allows waiting and avoids chasing the highest instantaneous Sun.
+    Each state is ``(UTC sample, verified station)``. Staying earns one sample
+    interval when both target centres are above the ideal 0-degree horizon.
+    Moving is allowed only on an explicit conceptual connection, consumes the
+    spherical-distance travel time plus a small turning allowance, and pays the
+    ``minimum_gain_hours`` relocation penalty. Visibility along an edge is not
+    inferred because no timestamped terrain-safe path geometry is available.
     """
     if rover_speed_kmh <= 0:
         raise ValueError("rover_speed_kmh must be positive")
+    if minimum_gain_hours < 0 or turn_allowance_hours < 0:
+        raise ValueError("planning penalties must not be negative")
     frames = validate_waypoint_ephemerides(ephemerides, waypoints)
     waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
     if start_waypoint_id not in waypoint_by_id:
@@ -282,95 +304,77 @@ def plan_route(
         neighbours[first].add(second)
         neighbours[second].add(first)
 
-    def window_hours(waypoint_id: str, start_index: int) -> float:
-        count = 0
-        for value in visible[waypoint_id][start_index:]:
-            if not value:
-                break
-            count += 1
-        return count * step_hours
+    count = len(times)
+    scores = [{waypoint.id: 0.0 for waypoint in waypoints} for _ in range(count)]
+    decisions: list[dict[str, tuple[str, int, float]]] = [dict() for _ in range(count)]
+
+    for index in range(count - 2, -1, -1):
+        for current in sorted(valid_ids):
+            stay_score = (
+                step_hours if visible[current][index] else 0.0
+            ) + scores[index + 1][current]
+            best_score = stay_score
+            best_decision = (current, index + 1, 0.0)
+            for candidate in sorted(neighbours[current]):
+                distance = great_circle_distance_km(
+                    waypoint_by_id[current], waypoint_by_id[candidate]
+                )
+                travel_hours = distance / rover_speed_kmh
+                arrival_steps = max(
+                    1,
+                    ceil((travel_hours + turn_allowance_hours) / step_hours),
+                )
+                arrival_index = index + arrival_steps
+                if arrival_index >= count:
+                    continue
+                candidate_score = (
+                    scores[arrival_index][candidate] - minimum_gain_hours
+                )
+                if candidate_score > best_score + 1e-9:
+                    best_score = candidate_score
+                    best_decision = (candidate, arrival_index, distance)
+            scores[index][current] = best_score
+            decisions[index][current] = best_decision
 
     segments: list[RouteSegment] = []
     current = start_waypoint_id
     index = 0
-    final_time = times[-1].to_pydatetime()
-    while index < len(times) - 1:
+    while index < count - 1:
+        destination, next_index, distance = decisions[index][current]
         start_time = times[index].to_pydatetime()
-        stay_window = window_hours(current, index)
-        best_id = current
-        best_utility = stay_window
-        best_window = stay_window
-        best_travel = 0.0
-        best_distance = 0.0
-
-        for candidate in sorted(neighbours[current]):
-            distance = great_circle_distance_km(
-                waypoint_by_id[current], waypoint_by_id[candidate]
+        end_time = times[next_index].to_pydatetime()
+        if destination == current:
+            has_future_option = any(
+                any(visible[item][index:]) for item in neighbours[current]
             )
-            travel_hours = distance / rover_speed_kmh
-            arrival_index = index + max(1, ceil(travel_hours / step_hours))
-            if arrival_index >= len(times) or not visible[candidate][arrival_index]:
-                continue
-            candidate_window = window_hours(candidate, arrival_index)
-            utility = candidate_window - travel_hours
-            if utility > best_utility + minimum_gain_hours:
-                best_id = candidate
-                best_utility = utility
-                best_window = candidate_window
-                best_travel = travel_hours
-                best_distance = distance
-
-        if best_id != current:
-            end_time = min(start_time + timedelta(hours=best_travel), final_time)
-            arrival_index = min(
-                len(times) - 1,
-                index + max(1, ceil(best_travel / step_hours)),
-            )
-            decision_time = times[arrival_index].to_pydatetime()
             reason = (
-                f"Transition to {best_id}: its projected geometric dual-visibility "
-                f"window is {best_window:.1f} h after {best_travel:.1f} h of travel."
+                "Remain stationary: relocation would not improve cumulative "
+                "geometric dual-visibility time after travel and movement penalty."
+                if has_future_option
+                else "Remain stationary: no feasible connected waypoint is available."
+            )
+            segments.append(RouteSegment(
+                start_time, end_time, current, current, 0.0, False, reason
+            ))
+        else:
+            physical_hours = distance / rover_speed_kmh
+            reason = (
+                f"Move to {destination}: dynamic planning improves the remaining "
+                f"geometric dual-visibility objective. Spherical distance "
+                f"{distance:.2f} km; minimum drive time {physical_hours:.1f} h. "
+                "Visibility and traversability along this conceptual link are unverified."
             )
             segments.append(RouteSegment(
                 start_time,
                 end_time,
                 current,
-                best_id,
-                best_distance,
+                destination,
+                distance,
                 True,
                 reason,
             ))
-            if end_time < decision_time:
-                segments.append(RouteSegment(
-                    end_time,
-                    decision_time,
-                    best_id,
-                    best_id,
-                    0.0,
-                    False,
-                    "Remain stationary after arrival until the next planning sample.",
-                ))
-            current = best_id
-            index = arrival_index
-            continue
-
-        next_time = times[index + 1].to_pydatetime()
-        reason = (
-            "Remain stationary: no connected waypoint provides enough additional "
-            "dual-visibility time to justify its travel duration."
-            if any(visible[item][index:] for item in neighbours[current])
-            else "Remain stationary: no feasible connected waypoint is available."
-        )
-        segments.append(RouteSegment(
-            start_time,
-            next_time,
-            current,
-            current,
-            0.0,
-            False,
-            reason,
-        ))
-        index += 1
+        current = destination
+        index = next_index
 
     return _merge_stationary_segments(segments)
 
@@ -453,7 +457,15 @@ def build_component_payload(
             state["sun_el"] > 0 and state["earth_el"] > 0
         )
         state["time_utc"] = timestamp.isoformat()
-        state["recommended_waypoint"] = str(state["to_id"])
+        upcoming = next(
+            (
+                item.to_id
+                for item in segments
+                if item.moving and item.start_utc >= timestamp.to_pydatetime()
+            ),
+            str(state["to_id"]),
+        )
+        state["recommended_waypoint"] = upcoming
         states.append(state)
 
     series = []
@@ -494,18 +506,18 @@ def build_component_payload(
             "metres. It is not timestamp-specific illumination."
         ),
         "terrain_note": (
-            "The dashed station link is a conceptual straight connector, not the "
-            "NASA traverse polyline and not a terrain-safe route."
+            "The station graph uses conceptual straight connectors between verified "
+            "NASA stations; it is not the NASA traverse polyline, a published "
+            "traverse length, or a terrain-safe route."
         ),
         "station_source_url": LUNAR_SURFACE_DATA_BOOK_URL,
         "scale_bar": {"distance_km": 2.0, "fraction": scale_bar_fraction(2.0)},
         "route": {
             **asdict(scenario),
-            "display_connector_length_km": great_circle_distance_km(
-                waypoint_by_id[scenario.station_ids[0]],
-                waypoint_by_id[scenario.station_ids[1]],
+            "display_connector_length_km": sum(
+                segment.distance_km for segment in segments if segment.moving
             ),
-            "connector_label": "Conceptual station link — not terrain validated",
+            "connector_label": "Conceptual station graph — not terrain validated",
         },
         "waypoints": [asdict(waypoint) for waypoint in waypoints],
         "connections": [list(connection) for connection in connections],
