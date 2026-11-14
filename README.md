@@ -28,6 +28,10 @@ score.
 - Landing-site, UTC start-date, and 24/48/72-hour mission configuration.
 - Interactive Plotly elevation and direction visualizations.
 - Matched-period comparison of two lunar surface observers.
+- Synchronized Solar Rover Planner with a continuous conceptual route, UTC
+  scrubbing, playback controls, and explainable dual-visibility decisions.
+- Explicitly manifested offline NASA cache for the five rover waypoints over
+  2026-11-14 through 2026-11-21 UTC; never substituted for another period.
 - UTC-preserving CSV export of the exact displayed ephemeris table.
 - Graceful API-error handling and one-hour caching of successful live results.
 - Responsive dark mission-control dashboard.
@@ -92,7 +96,11 @@ update process.
 3. Switch to `Live NASA (Horizons)` and run one configured observation period.
 4. Open **Site Comparison**, select two locations, and compare the same UTC
    interval for both observers.
-5. Open **Data & Sources** and **About** to explain provenance and limitations.
+5. Open **Solar Rover Planner**. Start with `Synthetic Demonstration`, press
+   Play, scrub the scientific timeline, and confirm that the rover, spotlight,
+   UTC cursor, and status panel remain synchronized. Switch to live data only
+   when network time allows ten cached Horizons target requests.
+6. Open **Data & Sources** and **About** to explain provenance and limitations.
 
 If Horizons is unavailable, Mission Control reports the error and changes to a
 clearly labelled `Demo (Fallback)` dataset. Site Comparison never mixes live
@@ -136,6 +144,13 @@ zero-degree local horizon:
   operational safety margins are outside the current model.
 - Catalog coordinates are explicitly demonstration locations and are not
   verified landing sites.
+- Solar Rover Planner waypoints and connections are conceptual. The background
+  is an official NASA/GSFC/ASU LROC multi-temporal illumination map, but the
+  waypoint overlay is not registered as a terrain or traversability product.
+- Rover planning uses a spherical-Moon distance estimate, configured maximum
+  speed, explicit local links, and a conservative visibility-window heuristic.
+  It does not model slope, wheel slip, energy storage, thermal constraints,
+  hazards, or optimal real-world navigation.
 - Pending mission metrics remain placeholders until `analysis.py` is
   implemented and scientifically reviewed.
 
@@ -145,10 +160,18 @@ zero-degree local horizon:
 - `horizons.py` — Horizons request construction, parsing, and validation.
 - `comparison.py` — aligned site-comparison helpers and charts.
 - `ephemeris_export.py` — UTC-safe CSV serialization and filenames.
+- `rover_planner.py` — conceptual waypoints, visibility evaluation, travel-time
+  constrained routing, interpolation, and simulation payloads.
+- `rover_component.py` — Streamlit Components v2 map/timeline renderer using a
+  single client-side simulation clock.
 - `analysis.py` — reserved interface for mission-analysis algorithms.
 - `sites.json` — demonstration landing-site catalog.
 - `data/demo_ephemeris.csv` — bundled offline synthetic data.
+- `data/rover_nasa_cache/` — validated, locally stored Horizons tables and a
+  provenance manifest for the fixed 2026-11-14 seven-day rover scenario.
 - `static/assets/` — decorative dashboard image assets.
+- `static/assets/shackleton-lroc.png` — NASA/GSFC/ASU LROC south-pole
+  illumination composite used as a clearly qualified visual backdrop.
 - `.streamlit/config.toml` — theme and static-serving configuration.
 - `tests/` — offline unit and Streamlit regression tests.
 

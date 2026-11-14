@@ -1,0 +1,513 @@
+"""Conceptual solar-rover planning helpers for LunarSight.
+
+This module deliberately stays independent from ``analysis.py``.  It evaluates
+the same geometric target-centre visibility predicate used by the UI, estimates
+great-circle distances between a small set of conceptual local waypoints, and
+builds a continuous, explainable route.  It does not model terrain, energy,
+hazards, wheel slip, or communications link performance.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from datetime import date, datetime, timedelta, timezone
+from math import asin, atan2, ceil, cos, degrees, radians, sin, sqrt
+from typing import Final, Mapping, Sequence
+
+import pandas as pd
+
+from horizons import EPHEMERIS_COLUMNS, EphemerisValidationError, validate_ephemeris
+
+MOON_RADIUS_KM: Final = 1737.4
+SOURCE_NASA_LIVE: Final = "NASA JPL Horizons — Live"
+SOURCE_NASA_CACHED: Final = "NASA JPL Horizons — Cached"
+SOURCE_SYNTHETIC: Final = "Synthetic Demonstration"
+
+
+@dataclass(frozen=True)
+class RoverWaypoint:
+    """One conceptual local waypoint near Shackleton crater."""
+
+    id: str
+    label: str
+    latitude_deg: float
+    longitude_deg_east: float
+    map_x: float
+    map_y: float
+    color: str
+
+
+@dataclass(frozen=True)
+class RouteSegment:
+    """A stationary or moving interval in a precalculated mission route."""
+
+    start_utc: datetime
+    end_utc: datetime
+    from_id: str
+    to_id: str
+    distance_km: float
+    moving: bool
+    reason: str
+
+
+WAYPOINTS: Final[tuple[RoverWaypoint, ...]] = (
+    RoverWaypoint("W1", "Waypoint 1", -89.900, 0.0, 0.74, 0.39, "#ffd23f"),
+    RoverWaypoint("W2", "Waypoint 2", -89.910, 40.0, 0.55, 0.20, "#bb86fc"),
+    RoverWaypoint("W3", "Waypoint 3", -89.920, 80.0, 0.34, 0.29, "#7899ff"),
+    RoverWaypoint("W4", "Waypoint 4", -89.900, 130.0, 0.29, 0.64, "#37d5e8"),
+    RoverWaypoint("W5", "Waypoint 5", -89.880, 70.0, 0.59, 0.68, "#6bd58b"),
+)
+
+# Only these local conceptual links may be considered by the planner.  No link
+# has been terrain-validated.
+CONNECTIONS: Final[tuple[tuple[str, str], ...]] = (
+    ("W1", "W2"),
+    ("W2", "W3"),
+    ("W3", "W4"),
+    ("W4", "W5"),
+    ("W5", "W1"),
+    ("W2", "W5"),
+)
+
+
+def dual_visibility(frame: pd.DataFrame) -> pd.Series:
+    """Return the geometric Sun-and-Earth-above-zero predicate."""
+    validated = validate_ephemeris(frame)
+    return (validated["sun_el"] > 0.0) & (validated["earth_el"] > 0.0)
+
+
+def great_circle_distance_km(first: RoverWaypoint, second: RoverWaypoint) -> float:
+    """Estimate surface distance on a spherical Moon."""
+    lat1, lat2 = radians(first.latitude_deg), radians(second.latitude_deg)
+    delta_lat = lat2 - lat1
+    delta_lon = radians(second.longitude_deg_east - first.longitude_deg_east)
+    a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
+    return 2 * MOON_RADIUS_KM * asin(min(1.0, sqrt(a)))
+
+
+def interpolate_fraction(start: datetime, end: datetime, moment: datetime) -> float:
+    """Return a clamped UTC interpolation fraction for ``moment``."""
+    start_utc, end_utc, moment_utc = (_ensure_utc(value) for value in (start, end, moment))
+    duration = (end_utc - start_utc).total_seconds()
+    if duration <= 0:
+        raise ValueError("end must be after start")
+    return min(1.0, max(0.0, (moment_utc - start_utc).total_seconds() / duration))
+
+
+def interpolate_position(
+    first: RoverWaypoint,
+    second: RoverWaypoint,
+    fraction: float,
+) -> tuple[float, float, float]:
+    """Linearly interpolate map position and return heading in degrees."""
+    progress = min(1.0, max(0.0, float(fraction)))
+    dx, dy = second.map_x - first.map_x, second.map_y - first.map_y
+    x = first.map_x + dx * progress
+    y = first.map_y + dy * progress
+    # SVG Y increases downward; atan2(dx, -dy) makes 0 degrees point up.
+    heading = (degrees(atan2(dx, -dy)) + 360.0) % 360.0 if dx or dy else 0.0
+    return x, y, heading
+
+
+def build_synthetic_ephemerides(
+    waypoint: RoverWaypoint,
+    start_date: date,
+    duration_days: int,
+    *,
+    step_hours: int = 3,
+) -> pd.DataFrame:
+    """Build an explicitly synthetic, site-distinct demonstration table.
+
+    The curves are deterministic visual fixtures, not an astronomical model and
+    never carry a NASA provenance label.
+    """
+    if duration_days not in (7, 14, 28):
+        raise ValueError("duration_days must be 7, 14, or 28")
+    if step_hours < 1:
+        raise ValueError("step_hours must be positive")
+    start = pd.Timestamp(start_date, tz="UTC")
+    periods = duration_days * 24 // step_hours + 1
+    times = pd.date_range(start, periods=periods, freq=f"{step_hours}h")
+    index = next(i for i, item in enumerate(WAYPOINTS) if item.id == waypoint.id)
+    hours = pd.Series(range(periods), dtype="float64") * step_hours
+    phase = index * 0.58
+
+    # Short illustrative cycles ensure the offline demo exercises waiting and
+    # relocation. They are intentionally not presented as lunar-period physics.
+    sun_el = 4.8 * (hours.mul(2 * 3.141592653589793 / 132) + phase).map(sin) + 1.0
+    earth_el = 3.6 * (hours.mul(2 * 3.141592653589793 / 174) + 0.4 - phase * 0.45).map(cos) + 0.7
+    sun_az = (hours * 1.31 + 42.0 + index * 29.0) % 360.0
+    earth_az = (hours * 0.73 + 210.0 - index * 17.0) % 360.0
+
+    return validate_ephemeris(pd.DataFrame({
+        "time_utc": times,
+        "sun_az": sun_az,
+        "sun_el": sun_el,
+        "earth_az": earth_az,
+        "earth_el": earth_el,
+    }))
+
+
+def downsample_ephemeris(frame: pd.DataFrame, step_hours: int = 3) -> pd.DataFrame:
+    """Validate and select a regular subset while retaining the final sample."""
+    if step_hours < 1:
+        raise ValueError("step_hours must be positive")
+    validated = validate_ephemeris(frame)
+    start = validated["time_utc"].iloc[0]
+    elapsed_hours = (
+        validated["time_utc"] - start
+    ).dt.total_seconds().div(3600).round(9)
+    selected = validated.loc[(elapsed_hours % step_hours).abs() < 1e-8]
+    if selected.empty or selected.index[-1] != validated.index[-1]:
+        selected = pd.concat([selected, validated.tail(1)])
+    return selected.drop_duplicates("time_utc").reset_index(drop=True)
+
+
+def validate_waypoint_ephemerides(
+    ephemerides: Mapping[str, pd.DataFrame],
+    waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
+) -> dict[str, pd.DataFrame]:
+    """Validate complete, timestamp-aligned data for every waypoint."""
+    expected = {waypoint.id for waypoint in waypoints}
+    missing = expected.difference(ephemerides)
+    if missing:
+        raise EphemerisValidationError(
+            f"Missing waypoint ephemerides: {', '.join(sorted(missing))}"
+        )
+    validated = {
+        waypoint.id: validate_ephemeris(ephemerides[waypoint.id])
+        for waypoint in waypoints
+    }
+    reference = validated[waypoints[0].id]["time_utc"].tolist()
+    if any(frame["time_utc"].tolist() != reference for frame in validated.values()):
+        raise EphemerisValidationError(
+            "Waypoint ephemerides must use identical increasing UTC timestamps"
+        )
+    return validated
+
+
+def plan_route(
+    ephemerides: Mapping[str, pd.DataFrame],
+    *,
+    rover_speed_kmh: float,
+    waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
+    connections: Sequence[tuple[str, str]] = CONNECTIONS,
+    start_waypoint_id: str = "W1",
+    minimum_gain_hours: float = 3.0,
+) -> list[RouteSegment]:
+    """Build an explainable route with travel-time and connectivity constraints.
+
+    At each available decision sample, the rover compares the remaining dual-
+    visibility run at its current node with connected nodes after their travel
+    time.  A move is selected only when its usable future window exceeds the
+    stay option by ``minimum_gain_hours``.  This intentionally conservative
+    heuristic allows waiting and avoids chasing the highest instantaneous Sun.
+    """
+    if rover_speed_kmh <= 0:
+        raise ValueError("rover_speed_kmh must be positive")
+    frames = validate_waypoint_ephemerides(ephemerides, waypoints)
+    waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
+    if start_waypoint_id not in waypoint_by_id:
+        raise ValueError("start_waypoint_id is not a known waypoint")
+    valid_ids = set(waypoint_by_id)
+    if any(first not in valid_ids or second not in valid_ids for first, second in connections):
+        raise ValueError("connections contain an unknown waypoint")
+
+    times = frames[start_waypoint_id]["time_utc"].tolist()
+    if len(times) < 2:
+        raise EphemerisValidationError("Route planning needs at least two UTC samples")
+    step_hours = (times[1] - times[0]).total_seconds() / 3600
+    if step_hours <= 0:
+        raise EphemerisValidationError("Route timestamps must increase")
+    visible = {
+        waypoint.id: dual_visibility(frames[waypoint.id]).tolist()
+        for waypoint in waypoints
+    }
+    neighbours = {waypoint.id: set() for waypoint in waypoints}
+    for first, second in connections:
+        neighbours[first].add(second)
+        neighbours[second].add(first)
+
+    def window_hours(waypoint_id: str, start_index: int) -> float:
+        count = 0
+        for value in visible[waypoint_id][start_index:]:
+            if not value:
+                break
+            count += 1
+        return count * step_hours
+
+    segments: list[RouteSegment] = []
+    current = start_waypoint_id
+    index = 0
+    final_time = times[-1].to_pydatetime()
+    while index < len(times) - 1:
+        start_time = times[index].to_pydatetime()
+        stay_window = window_hours(current, index)
+        best_id = current
+        best_utility = stay_window
+        best_window = stay_window
+        best_travel = 0.0
+        best_distance = 0.0
+
+        for candidate in sorted(neighbours[current]):
+            distance = great_circle_distance_km(
+                waypoint_by_id[current], waypoint_by_id[candidate]
+            )
+            travel_hours = distance / rover_speed_kmh
+            arrival_index = index + max(1, ceil(travel_hours / step_hours))
+            if arrival_index >= len(times) or not visible[candidate][arrival_index]:
+                continue
+            candidate_window = window_hours(candidate, arrival_index)
+            utility = candidate_window - travel_hours
+            if utility > best_utility + minimum_gain_hours:
+                best_id = candidate
+                best_utility = utility
+                best_window = candidate_window
+                best_travel = travel_hours
+                best_distance = distance
+
+        if best_id != current:
+            end_time = min(start_time + timedelta(hours=best_travel), final_time)
+            arrival_index = min(
+                len(times) - 1,
+                index + max(1, ceil(best_travel / step_hours)),
+            )
+            decision_time = times[arrival_index].to_pydatetime()
+            reason = (
+                f"Transition to {best_id}: its projected geometric dual-visibility "
+                f"window is {best_window:.1f} h after {best_travel:.1f} h of travel."
+            )
+            segments.append(RouteSegment(
+                start_time,
+                end_time,
+                current,
+                best_id,
+                best_distance,
+                True,
+                reason,
+            ))
+            if end_time < decision_time:
+                segments.append(RouteSegment(
+                    end_time,
+                    decision_time,
+                    best_id,
+                    best_id,
+                    0.0,
+                    False,
+                    "Remain stationary after arrival until the next planning sample.",
+                ))
+            current = best_id
+            index = arrival_index
+            continue
+
+        next_time = times[index + 1].to_pydatetime()
+        reason = (
+            "Remain stationary: no connected waypoint provides enough additional "
+            "dual-visibility time to justify its travel duration."
+            if any(visible[item][index:] for item in neighbours[current])
+            else "Remain stationary: no feasible connected waypoint is available."
+        )
+        segments.append(RouteSegment(
+            start_time,
+            next_time,
+            current,
+            current,
+            0.0,
+            False,
+            reason,
+        ))
+        index += 1
+
+    return _merge_stationary_segments(segments)
+
+
+def route_state_at(
+    moment: datetime,
+    segments: Sequence[RouteSegment],
+    waypoint_by_id: Mapping[str, RoverWaypoint],
+) -> dict[str, object]:
+    """Interpolate the rover state at one UTC instant."""
+    if not segments:
+        raise ValueError("segments must not be empty")
+    moment_utc = _ensure_utc(moment)
+    segment = next(
+        (
+            item
+            for item in segments
+            if item.start_utc <= moment_utc <= item.end_utc
+        ),
+        segments[0] if moment_utc < segments[0].start_utc else segments[-1],
+    )
+    progress = (
+        interpolate_fraction(segment.start_utc, segment.end_utc, moment_utc)
+        if segment.moving
+        else 0.0
+    )
+    x, y, heading = interpolate_position(
+        waypoint_by_id[segment.from_id], waypoint_by_id[segment.to_id], progress
+    )
+    return {
+        "x": x,
+        "y": y,
+        "heading_deg": heading,
+        "from_id": segment.from_id,
+        "to_id": segment.to_id,
+        "current_waypoint": segment.to_id if progress >= 1.0 else segment.from_id,
+        "next_waypoint": segment.to_id,
+        "moving": segment.moving and progress < 1.0,
+        "progress": progress,
+        "distance_km": segment.distance_km,
+        "travel_hours": (
+            (segment.end_utc - segment.start_utc).total_seconds() / 3600
+            if segment.moving
+            else 0.0
+        ),
+        "reason": segment.reason,
+    }
+
+
+def build_component_payload(
+    ephemerides: Mapping[str, pd.DataFrame],
+    segments: Sequence[RouteSegment],
+    *,
+    source_label: str,
+    rover_speed_kmh: float,
+    map_url: str,
+    waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
+    connections: Sequence[tuple[str, str]] = CONNECTIONS,
+) -> dict[str, object]:
+    """Serialize validated planning inputs for the client-side simulation."""
+    if source_label not in {SOURCE_NASA_LIVE, SOURCE_NASA_CACHED, SOURCE_SYNTHETIC}:
+        raise ValueError("Unknown ephemeris provenance label")
+    frames = validate_waypoint_ephemerides(ephemerides, waypoints)
+    waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
+    times = frames[waypoints[0].id]["time_utc"]
+
+    states: list[dict[str, object]] = []
+    for row_index, timestamp in enumerate(times):
+        state = route_state_at(timestamp.to_pydatetime(), segments, waypoint_by_id)
+        from_row = frames[str(state["from_id"])].iloc[row_index]
+        to_row = frames[str(state["to_id"])].iloc[row_index]
+        progress = float(state["progress"])
+        for column in EPHEMERIS_COLUMNS[1:]:
+            state[column] = float(
+                from_row[column] + (to_row[column] - from_row[column]) * progress
+            )
+        state["dual_visible"] = bool(
+            state["sun_el"] > 0 and state["earth_el"] > 0
+        )
+        state["time_utc"] = timestamp.isoformat()
+        state["recommended_waypoint"] = str(state["to_id"])
+        states.append(state)
+
+    series = []
+    for waypoint in waypoints:
+        frame = frames[waypoint.id]
+        points = [
+            {
+                "time_utc": row.time_utc.isoformat(),
+                "sun_el": float(row.sun_el),
+                "earth_el": float(row.earth_el),
+                "sun_az": float(row.sun_az),
+                "earth_az": float(row.earth_az),
+                "dual_visible": bool(row.sun_el > 0 and row.earth_el > 0),
+            }
+            for row in frame.itertuples(index=False)
+        ]
+        series.append({
+            **asdict(waypoint),
+            "points": points,
+        })
+
+    return {
+        "source_label": source_label,
+        "source_kind": "synthetic" if source_label == SOURCE_SYNTHETIC else "nasa",
+        "start_utc": times.iloc[0].isoformat(),
+        "end_utc": times.iloc[-1].isoformat(),
+        "sample_hours": (
+            (times.iloc[1] - times.iloc[0]).total_seconds() / 3600
+            if len(times) > 1
+            else None
+        ),
+        "rover_speed_kmh": rover_speed_kmh,
+        "map_url": map_url,
+        "map_credit": "NASA/GSFC/Arizona State University — LROC multi-temporal illumination map",
+        "map_source_url": "https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/",
+        "spatial_note": (
+            "Conceptual waypoint overlay; the NASA image and route nodes are not "
+            "registered as a traversability map."
+        ),
+        "waypoints": [asdict(waypoint) for waypoint in waypoints],
+        "connections": [list(connection) for connection in connections],
+        "segments": [
+            {
+                **asdict(segment),
+                "start_utc": segment.start_utc.isoformat(),
+                "end_utc": segment.end_utc.isoformat(),
+            }
+            for segment in segments
+        ],
+        "states": states,
+        "series": series,
+    }
+
+
+def assert_route_constraints(
+    segments: Sequence[RouteSegment],
+    *,
+    rover_speed_kmh: float,
+    connections: Sequence[tuple[str, str]] = CONNECTIONS,
+    tolerance: float = 1e-9,
+) -> None:
+    """Raise when route continuity, connectivity, or speed is invalid."""
+    allowed = {frozenset(connection) for connection in connections}
+    previous: RouteSegment | None = None
+    for segment in segments:
+        if segment.end_utc <= segment.start_utc:
+            raise ValueError("Route segments must have positive duration")
+        if previous:
+            if segment.start_utc != previous.end_utc:
+                raise ValueError("Route segments must be time-continuous")
+            if segment.from_id != previous.to_id:
+                raise ValueError("Route segments must be spatially continuous")
+        duration_hours = (segment.end_utc - segment.start_utc).total_seconds() / 3600
+        if segment.moving:
+            if frozenset((segment.from_id, segment.to_id)) not in allowed:
+                raise ValueError("Route uses an invalid waypoint transition")
+            if segment.distance_km / duration_hours > rover_speed_kmh + tolerance:
+                raise ValueError("Route exceeds the configured rover speed")
+        elif segment.from_id != segment.to_id or segment.distance_km != 0:
+            raise ValueError("Stationary segments must remain at one waypoint")
+        previous = segment
+
+
+def _merge_stationary_segments(segments: Sequence[RouteSegment]) -> list[RouteSegment]:
+    merged: list[RouteSegment] = []
+    for segment in segments:
+        if (
+            merged
+            and not segment.moving
+            and not merged[-1].moving
+            and segment.from_id == merged[-1].from_id
+            and segment.start_utc == merged[-1].end_utc
+            and segment.reason == merged[-1].reason
+        ):
+            previous = merged[-1]
+            merged[-1] = RouteSegment(
+                previous.start_utc,
+                segment.end_utc,
+                previous.from_id,
+                previous.to_id,
+                0.0,
+                False,
+                previous.reason,
+            )
+        else:
+            merged.append(segment)
+    return merged
+
+
+def _ensure_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError("datetime values must be timezone-aware")
+    return value.astimezone(timezone.utc)
