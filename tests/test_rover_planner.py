@@ -9,6 +9,7 @@ from horizons import EphemerisValidationError
 from horizons import load_ephemeris_csv
 from rover_planner import (
     CONNECTIONS,
+    DEFAULT_ROUTE_ID,
     SOURCE_NASA_CACHED,
     SOURCE_NASA_LIVE,
     SOURCE_SYNTHETIC,
@@ -18,6 +19,7 @@ from rover_planner import (
     build_component_payload,
     build_synthetic_ephemerides,
     dual_visibility,
+    get_route_scenario,
     interpolate_fraction,
     interpolate_position,
     plan_route,
@@ -74,11 +76,25 @@ def test_dual_visibility_requires_both_object_centres_above_zero():
 
 
 def test_route_segments_are_continuous_connected_and_speed_limited():
-    frames = synthetic_frames()
-    segments = plan_route(frames, rover_speed_kmh=0.2)
+    frames = {
+        waypoint.id: constant_frame(-3.0, -2.0, periods=30)
+        for waypoint in WAYPOINTS
+    }
+    frames["SR1"] = constant_frame(3.0, 2.0, periods=30)
+    connections = (("CR1", "SR1"),)
+    segments = plan_route(
+        frames,
+        rover_speed_kmh=0.5,
+        connections=connections,
+        start_waypoint_id="CR1",
+    )
     assert any(segment.moving for segment in segments)
-    assert_route_constraints(segments, rover_speed_kmh=0.2)
-    allowed = {frozenset(connection) for connection in CONNECTIONS}
+    assert_route_constraints(
+        segments,
+        rover_speed_kmh=0.5,
+        connections=connections,
+    )
+    allowed = {frozenset(connection) for connection in connections}
     assert all(
         frozenset((segment.from_id, segment.to_id)) in allowed
         for segment in segments
@@ -113,7 +129,7 @@ def test_planner_stays_stationary_when_travel_has_no_visibility_gain():
     segments = plan_route(frames, rover_speed_kmh=0.2)
     assert segments
     assert all(not segment.moving for segment in segments)
-    assert all(segment.from_id == "W1" for segment in segments)
+    assert all(segment.from_id == "CR1" for segment in segments)
 
 
 def test_no_feasible_waypoint_scenario_remains_stationary():
@@ -125,8 +141,8 @@ def test_no_feasible_waypoint_scenario_remains_stationary():
 
 def test_missing_waypoint_nasa_data_is_rejected():
     frames = synthetic_frames()
-    frames.pop("W4")
-    with pytest.raises(EphemerisValidationError, match="W4"):
+    frames.pop("CR3")
+    with pytest.raises(EphemerisValidationError, match="CR3"):
         plan_route(frames, rover_speed_kmh=0.2)
 
 
@@ -142,13 +158,18 @@ def test_component_payload_preserves_explicit_source_provenance(source):
         segments,
         source_label=source,
         rover_speed_kmh=0.2,
-        map_url="/app/static/assets/shackleton-lroc.png",
+        map_url="/app/static/assets/lola-shackleton-hillshade.webp",
     )
     assert payload["source_label"] == source
     assert payload["source_kind"] == (
         "synthetic" if source == SOURCE_SYNTHETIC else "nasa"
     )
-    assert payload["spatial_note"].startswith("Conceptual waypoint overlay")
+    assert payload["spatial_note"].startswith("Georeferenced terrain hillshade")
+    assert payload["route"]["id"] == DEFAULT_ROUTE_ID
+    assert payload["route"]["official_traverse_length_km"] == 11.15
+    assert payload["route"]["display_connector_length_km"] != 11.15
+    assert "not the NASA traverse polyline" in payload["terrain_note"]
+    assert "20250002845" in payload["station_source_url"]
 
 
 def test_unknown_source_cannot_be_silently_presented_as_nasa():
@@ -178,4 +199,11 @@ def test_bundled_nasa_cache_is_complete_aligned_and_explicitly_manifested():
     }
     assert {len(frame) for frame in frames.values()} == {57}
     assert len({tuple(frame["time_utc"]) for frame in frames.values()}) == 1
-    assert frames["W1"].iloc[0]["sun_el"] == pytest.approx(1.496957)
+    assert manifest["schema_version"] == 2
+    assert set(manifest["stations"]) == {waypoint.id for waypoint in WAYPOINTS}
+    assert manifest["stations"]["CR1"] == {
+        "latitude_deg": -89.468,
+        "longitude_deg_east": 222.6,
+    }
+    assert frames["CR1"].iloc[0]["sun_el"] == pytest.approx(1.501092)
+    assert get_route_scenario(DEFAULT_ROUTE_ID).station_ids == ("CR1", "SR1")

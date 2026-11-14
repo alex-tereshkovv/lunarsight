@@ -2,8 +2,8 @@
 
 This module deliberately stays independent from ``analysis.py``.  It evaluates
 the same geometric target-centre visibility predicate used by the UI, estimates
-great-circle distances between a small set of conceptual local waypoints, and
-builds a continuous, explainable route.  It does not model terrain, energy,
+great-circle distances between published NASA traverse stations, and builds a
+continuous, explainable display route.  It does not model terrain, energy,
 hazards, wheel slip, or communications link performance.
 """
 
@@ -17,6 +17,13 @@ from typing import Final, Mapping, Sequence
 import pandas as pd
 
 from horizons import EPHEMERIS_COLUMNS, EphemerisValidationError, validate_ephemeris
+from rover_geo import (
+    LOLA_LOCAL_DEM_URL,
+    LUNAR_SURFACE_DATA_BOOK_URL,
+    VERIFIED_STATIONS,
+    scale_bar_fraction,
+    station_map_position,
+)
 
 MOON_RADIUS_KM: Final = 1737.4
 SOURCE_NASA_LIVE: Final = "NASA JPL Horizons — Live"
@@ -26,7 +33,7 @@ SOURCE_SYNTHETIC: Final = "Synthetic Demonstration"
 
 @dataclass(frozen=True)
 class RoverWaypoint:
-    """One conceptual local waypoint near Shackleton crater."""
+    """One published NASA representative-traverse station."""
 
     id: str
     label: str
@@ -50,24 +57,67 @@ class RouteSegment:
     reason: str
 
 
-WAYPOINTS: Final[tuple[RoverWaypoint, ...]] = (
-    RoverWaypoint("W1", "Waypoint 1", -89.900, 0.0, 0.74, 0.39, "#ffd23f"),
-    RoverWaypoint("W2", "Waypoint 2", -89.910, 40.0, 0.55, 0.20, "#bb86fc"),
-    RoverWaypoint("W3", "Waypoint 3", -89.920, 80.0, 0.34, 0.29, "#7899ff"),
-    RoverWaypoint("W4", "Waypoint 4", -89.900, 130.0, 0.29, 0.64, "#37d5e8"),
-    RoverWaypoint("W5", "Waypoint 5", -89.880, 70.0, 0.59, 0.68, "#6bd58b"),
+@dataclass(frozen=True)
+class RoverRouteScenario:
+    """A documented endpoint scenario with a conceptual display connector."""
+
+    id: str
+    label: str
+    station_ids: tuple[str, str]
+    official_traverse_length_km: float
+    source_pages: str
+
+
+_STATION_COLORS: Final = {
+    "CR1": "#ffd23f",
+    "CR2": "#9a78ff",
+    "CR3": "#ad8aff",
+    "SR1": "#38c9ff",
+    "SR2": "#5ed6ff",
+    "SR3": "#73e1d1",
+    "PSR1": "#c58cff",
+}
+
+WAYPOINTS: Final[tuple[RoverWaypoint, ...]] = tuple(
+    RoverWaypoint(
+        station.id,
+        station.label,
+        station.latitude_deg,
+        station.longitude_deg_east,
+        *station_map_position(station),
+        _STATION_COLORS[station.id],
+    )
+    for station in VERIFIED_STATIONS
 )
 
-# Only these local conceptual links may be considered by the planner.  No link
-# has been terrain-validated.
-CONNECTIONS: Final[tuple[tuple[str, str], ...]] = (
-    ("W1", "W2"),
-    ("W2", "W3"),
-    ("W3", "W4"),
-    ("W4", "W5"),
-    ("W5", "W1"),
-    ("W2", "W5"),
+ROUTE_SCENARIOS: Final[tuple[RoverRouteScenario, ...]] = (
+    RoverRouteScenario(
+        "CR1_SR1",
+        "CR1 → SR1 representative traverse",
+        ("CR1", "SR1"),
+        11.15,
+        "NASA Lunar Surface Data Book, pp. 55–59",
+    ),
+    RoverRouteScenario(
+        "SR3_PSR1",
+        "SR3 → PSR1 representative traverse",
+        ("SR3", "PSR1"),
+        8.66,
+        "NASA Lunar Surface Data Book, pp. 55–60",
+    ),
 )
+DEFAULT_ROUTE_ID: Final = "CR1_SR1"
+CONNECTIONS: Final[tuple[tuple[str, str], ...]] = (
+    ROUTE_SCENARIOS[0].station_ids,
+)
+
+
+def get_route_scenario(route_id: str) -> RoverRouteScenario:
+    """Return one supported NASA endpoint scenario."""
+    try:
+        return next(item for item in ROUTE_SCENARIOS if item.id == route_id)
+    except StopIteration as error:
+        raise ValueError(f"Unknown rover route scenario: {route_id}") from error
 
 
 def dual_visibility(frame: pd.DataFrame) -> pd.Series:
@@ -192,7 +242,7 @@ def plan_route(
     rover_speed_kmh: float,
     waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
     connections: Sequence[tuple[str, str]] = CONNECTIONS,
-    start_waypoint_id: str = "W1",
+    start_waypoint_id: str = "CR1",
     minimum_gain_hours: float = 3.0,
 ) -> list[RouteSegment]:
     """Build an explainable route with travel-time and connectivity constraints.
@@ -373,6 +423,7 @@ def build_component_payload(
     source_label: str,
     rover_speed_kmh: float,
     map_url: str,
+    route_scenario: RoverRouteScenario | None = None,
     waypoints: Sequence[RoverWaypoint] = WAYPOINTS,
     connections: Sequence[tuple[str, str]] = CONNECTIONS,
 ) -> dict[str, object]:
@@ -380,6 +431,7 @@ def build_component_payload(
     if source_label not in {SOURCE_NASA_LIVE, SOURCE_NASA_CACHED, SOURCE_SYNTHETIC}:
         raise ValueError("Unknown ephemeris provenance label")
     frames = validate_waypoint_ephemerides(ephemerides, waypoints)
+    scenario = route_scenario or get_route_scenario(DEFAULT_ROUTE_ID)
     waypoint_by_id = {waypoint.id: waypoint for waypoint in waypoints}
     times = frames[waypoints[0].id]["time_utc"]
 
@@ -431,12 +483,26 @@ def build_component_payload(
         ),
         "rover_speed_kmh": rover_speed_kmh,
         "map_url": map_url,
-        "map_credit": "NASA/GSFC/Arizona State University — LROC multi-temporal illumination map",
-        "map_source_url": "https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/",
+        "map_credit": "NASA/GSFC PGDA — LOLA Site01 + Site04, 5 m/pixel DEM",
+        "map_source_url": LOLA_LOCAL_DEM_URL,
         "spatial_note": (
-            "Conceptual waypoint overlay; the NASA image and route nodes are not "
-            "registered as a traversability map."
+            "Georeferenced terrain hillshade in lunar south-polar stereographic "
+            "metres. It is not timestamp-specific illumination."
         ),
+        "terrain_note": (
+            "The dashed station link is a conceptual straight connector, not the "
+            "NASA traverse polyline and not a terrain-safe route."
+        ),
+        "station_source_url": LUNAR_SURFACE_DATA_BOOK_URL,
+        "scale_bar": {"distance_km": 2.0, "fraction": scale_bar_fraction(2.0)},
+        "route": {
+            **asdict(scenario),
+            "display_connector_length_km": great_circle_distance_km(
+                waypoint_by_id[scenario.station_ids[0]],
+                waypoint_by_id[scenario.station_ids[1]],
+            ),
+            "connector_label": "Conceptual station link — not terrain validated",
+        },
         "waypoints": [asdict(waypoint) for waypoint in waypoints],
         "connections": [list(connection) for connection in connections],
         "segments": [

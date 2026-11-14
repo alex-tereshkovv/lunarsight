@@ -28,9 +28,12 @@ score.
 - Landing-site, UTC start-date, and 24/48/72-hour mission configuration.
 - Interactive Plotly elevation and direction visualizations.
 - Matched-period comparison of two lunar surface observers.
-- Synchronized Solar Rover Planner with a continuous conceptual route, UTC
-  scrubbing, playback controls, and explainable dual-visibility decisions.
-- Explicitly manifested offline NASA cache for the five rover waypoints over
+- Synchronized Solar Rover Planner with seven published NASA representative-
+  traverse stations, UTC scrubbing, playback controls, and explainable
+  geometric dual-visibility decisions.
+- Georeferenced terrain hillshade preprocessed from NASA PGDA Site01/Site04
+  LOLA 5 m/pixel DEMs in lunar south-polar stereographic metres.
+- Explicitly manifested offline NASA cache for the seven rover stations over
   2026-11-14 through 2026-11-21 UTC; never substituted for another period.
 - UTC-preserving CSV export of the exact displayed ephemeris table.
 - Graceful API-error handling and one-hour caching of successful live results.
@@ -96,10 +99,11 @@ update process.
 3. Switch to `Live NASA (Horizons)` and run one configured observation period.
 4. Open **Site Comparison**, select two locations, and compare the same UTC
    interval for both observers.
-5. Open **Solar Rover Planner**. Start with `Synthetic Demonstration`, press
-   Play, scrub the scientific timeline, and confirm that the rover, spotlight,
-   UTC cursor, and status panel remain synchronized. Switch to live data only
-   when network time allows ten cached Horizons target requests.
+5. Open **Solar Rover Planner**. The default fixed-period dataset is a real,
+   locally cached NASA Horizons result. Press Play, scrub the scientific
+   timeline, and confirm that the rover, map, UTC cursor, and status panel stay
+   synchronized. The optional live mode makes separate Sun and Earth requests
+   for each of seven verified stations.
 6. Open **Data & Sources** and **About** to explain provenance and limitations.
 
 If Horizons is unavailable, Mission Control reports the error and changes to a
@@ -130,6 +134,37 @@ The API request syntax follows the official
 [NASA JPL Horizons API documentation](https://ssd-api.jpl.nasa.gov/doc/horizons.html)
 and [Horizons manual](https://ssd.jpl.nasa.gov/horizons/manual.html).
 
+## Solar Rover Planner data provenance
+
+The planner uses the following east-positive station coordinates from NASA's
+[Lunar Surface Data Book, M2M-30044 (2025)](https://ntrs.nasa.gov/api/citations/20250002845/downloads/M2M-30044%20Lunar%20Surface%20Data%20Book%20Baseline_Final.pdf):
+
+| Station | Latitude | Longitude |
+| --- | ---: | ---: |
+| CR1 | -89.468° | 222.6° E |
+| CR2 | -89.500° | 222.1° E |
+| CR3 | -89.418° | 221.3° E |
+| SR1 | -89.685° | 196.7° E |
+| SR2 | -89.740° | 201.2° E |
+| SR3 | -89.808° | 205.9° E |
+| PSR1 | -89.575° | 196.7° E |
+
+The terrain backdrop is a display hillshade built offline from NASA PGDA
+[Site01 Connecting Ridge and Site04 Shackleton Rim LOLA products](https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/).
+The source GeoTIFFs are 5 m/pixel, use south-polar stereographic X/Y metres,
+and reference `MOON_ME`/DE421. The committed crop, projection parameters,
+processing note, and source URLs are recorded in
+`data/rover_map_manifest.json`. The scale bar and station positions are derived
+from that projected coordinate system. The hillshade uses a fixed display
+light direction and is not a timestamp-specific sunlight or shadow simulation.
+
+The default scenarios use the NASA-published CR1→SR1 and SR3→PSR1 endpoints.
+The Data Book reports traverse lengths of 11.15 km and 8.66 km respectively.
+Because the source route polylines have not been digitized into LunarSight, the
+dashboard draws only a dashed straight station connector and reports its
+straight-line length separately. It is not a claim of NASA route geometry,
+terrain safety, or verified traversability.
+
 ## Scientific limitations
 
 LunarSight reports geometric target-center visibility relative to an ideal
@@ -144,9 +179,13 @@ zero-degree local horizon:
   operational safety margins are outside the current model.
 - Catalog coordinates are explicitly demonstration locations and are not
   verified landing sites.
-- Solar Rover Planner waypoints and connections are conceptual. The background
-  is an official NASA/GSFC/ASU LROC multi-temporal illumination map, but the
-  waypoint overlay is not registered as a terrain or traversability product.
+- Solar Rover Planner station coordinates are published NASA representative-
+  traverse locations. The dashed connector is conceptual and is not the NASA
+  route polyline or a terrain/traversability product.
+- The LOLA-derived background is a terrain hillshade, not real-time sunlight.
+  The historical NASA
+  [south-pole illumination reference](https://science.nasa.gov/photojournal/south-pole-illumination-map/)
+  is multi-temporal and is not used as a timestamp-specific shadow model.
 - Rover planning uses a spherical-Moon distance estimate, configured maximum
   speed, explicit local links, and a conservative visibility-window heuristic.
   It does not model slope, wheel slip, energy storage, thermal constraints,
@@ -160,8 +199,10 @@ zero-degree local horizon:
 - `horizons.py` — Horizons request construction, parsing, and validation.
 - `comparison.py` — aligned site-comparison helpers and charts.
 - `ephemeris_export.py` — UTC-safe CSV serialization and filenames.
-- `rover_planner.py` — conceptual waypoints, visibility evaluation, travel-time
-  constrained routing, interpolation, and simulation payloads.
+- `rover_planner.py` — verified station models, visibility evaluation,
+  travel-time constrained conceptual routing, interpolation, and payloads.
+- `rover_geo.py` — verified station catalog, lunar south-polar projection, map
+  normalization, and projected scale-bar helpers.
 - `rover_component.py` — Streamlit Components v2 map/timeline renderer using a
   single client-side simulation clock.
 - `analysis.py` — reserved interface for mission-analysis algorithms.
@@ -169,9 +210,14 @@ zero-degree local horizon:
 - `data/demo_ephemeris.csv` — bundled offline synthetic data.
 - `data/rover_nasa_cache/` — validated, locally stored Horizons tables and a
   provenance manifest for the fixed 2026-11-14 seven-day rover scenario.
+- `data/rover_map_manifest.json` — LOLA crop, projection, processing, and source
+  provenance for the rover hillshade.
 - `static/assets/` — decorative dashboard image assets.
-- `static/assets/shackleton-lroc.png` — NASA/GSFC/ASU LROC south-pole
-  illumination composite used as a clearly qualified visual backdrop.
+- `static/assets/lola-shackleton-hillshade.webp` — compact display hillshade
+  preprocessed from NASA PGDA Site01/Site04 LOLA elevation products.
+- `scripts/` — reproducible offline tools for rebuilding the basemap and fixed
+  Horizons cache; the application never downloads multi-gigabyte rasters at
+  runtime.
 - `.streamlit/config.toml` — theme and static-serving configuration.
 - `tests/` — offline unit and Streamlit regression tests.
 
