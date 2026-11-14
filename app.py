@@ -1141,7 +1141,7 @@ st.markdown(
     [data-testid="stSidebar"] {
       background:
         linear-gradient(180deg, rgba(4,14,27,.99) 0%, rgba(5,18,33,.96) 43%, rgba(4,15,28,.56) 72%, rgba(3,10,20,.2) 100%),
-        url("/app/static/assets/lunar-sidebar.png") center bottom / cover no-repeat;
+        url("app/static/assets/lunar-sidebar.png") center bottom / cover no-repeat;
       border-right: 1px solid #173754;
       box-shadow: 8px 0 30px rgba(0,0,0,.28);
       min-width: 238px;
@@ -1221,7 +1221,7 @@ st.markdown(
       border-radius: 0 0 12px 12px;
       background:
         linear-gradient(90deg, rgba(3,12,24,.95) 0%, rgba(3,12,24,.76) 35%, rgba(3,12,24,.42) 67%, rgba(3,12,24,.76) 100%),
-        url("/app/static/assets/lunar-hero.png") center 61% / cover no-repeat;
+        url("app/static/assets/lunar-hero.png") center 61% / cover no-repeat;
       box-shadow: inset 0 -28px 42px rgba(3,10,20,.76);
     }
     .mission-hero > div { position: relative; z-index: 1; }
@@ -1477,7 +1477,7 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-brand">
-          <img class="moon-mark" src="/app/static/assets/lunar-crescent.png"
+          <img class="moon-mark" src="app/static/assets/lunar-crescent.png"
                alt="Crescent Moon">
           <div>
             <div class="brand-title"><span>Lunar</span>Sight</div>
