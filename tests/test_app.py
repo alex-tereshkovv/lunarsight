@@ -176,6 +176,7 @@ def test_sidebar_navigation_opens_all_sections():
 
     for section, heading in [
         ("Site Comparison", "Landing Site Comparison"),
+        ("Solar Rover Planner", "Solar Rover Planner"),
         ("Data & Sources", "Data & Sources"),
         ("About", "About LunarSight"),
     ]:
@@ -184,6 +185,42 @@ def test_sidebar_navigation_opens_all_sections():
         navigation = app.radio[0]
         assert not app.exception
         assert any(heading in item.value for item in app.markdown)
+
+
+def test_solar_rover_planner_defaults_to_explicit_synthetic_scenario():
+    with patch("horizons.fetch_ephemeris") as fetch:
+        app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
+        app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
+
+    assert not app.exception
+    fetch.assert_not_called()
+    assert widget_with_label(
+        app.selectbox, "Scientific Data Source"
+    ).value == "Synthetic Demonstration"
+    assert any(
+        "not NASA ephemerides" in item.value
+        for item in app.warning
+    )
+
+
+def test_solar_rover_cached_nasa_source_is_offline_and_explicit():
+    with patch("horizons.fetch_ephemeris") as fetch:
+        app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
+        app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
+        widget_with_label(app.selectbox, "Scientific Data Source").set_value(
+            "NASA JPL Horizons — Cached"
+        )
+        app.date_input[0].set_value(date(2026, 11, 14))
+        widget_with_label(app.selectbox, "Observation Period").set_value(7)
+        app.form_submit_button[0].click().run(timeout=30)
+
+    assert not app.exception
+    fetch.assert_not_called()
+    assert not app.error
+    assert any(
+        "NASA JPL Horizons — Cached" in item.value
+        for item in app.success
+    )
 
 
 def test_live_site_comparison_uses_each_site_coordinates_and_shared_period():

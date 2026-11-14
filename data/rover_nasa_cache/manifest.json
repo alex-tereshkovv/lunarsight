@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "source_label": "NASA JPL Horizons — Cached",
+  "source_url": "https://ssd.jpl.nasa.gov/api/horizons.api",
+  "retrieved_utc": "2026-11-14",
+  "observation_start_utc": "2026-11-14T00:00:00Z",
+  "observation_end_utc": "2026-11-21T00:00:00Z",
+  "sample_interval_hours": 3,
+  "observer": "Lunar surface coord@301",
+  "coordinate_convention": "Lunar geodetic latitude and east-positive longitude, degrees",
+  "targets": {
+    "sun": "10",
+    "earth": "399"
+  },
+  "quantities": "4 (apparent azimuth and elevation, AIRLESS)",
+  "files": {
+    "W1": "W1.csv",
+    "W2": "W2.csv",
+    "W3": "W3.csv",
+    "W4": "W4.csv",
+    "W5": "W5.csv"
+  },
+  "scientific_note": "Object-centre geometry relative to an ideal horizon; terrain, power, link budget, and hazards are not modeled."
+}

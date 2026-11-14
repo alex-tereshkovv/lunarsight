@@ -25,10 +25,24 @@ from horizons import (
     load_ephemeris_csv,
     validate_ephemeris,
 )
+from rover_component import solar_rover_simulation
+from rover_planner import (
+    SOURCE_NASA_CACHED,
+    SOURCE_NASA_LIVE,
+    SOURCE_SYNTHETIC,
+    WAYPOINTS,
+    assert_route_constraints,
+    build_component_payload,
+    build_synthetic_ephemerides,
+    downsample_ephemeris,
+    plan_route,
+)
 
 ROOT = Path(__file__).resolve().parent
 MIN_OBSERVATION_DATE = date(2000, 1, 1)
 MAX_OBSERVATION_DATE = date(2100, 12, 31)
+ROVER_CACHE_START_DATE = date(2026, 11, 14)
+ROVER_CACHE_DURATION_DAYS = 7
 
 
 def static_asset_url(filename: str, app_url: str | None = None) -> str:
@@ -902,6 +916,201 @@ def fetch_selected_data(
     return frame, "Demo (Synthetic)", None
 
 
+def build_rover_ephemerides(
+    selected_date: date,
+    duration_days: int,
+    data_source: str,
+) -> dict[str, pd.DataFrame]:
+    """Load one aligned ephemeris table per conceptual Shackleton waypoint."""
+    frames: dict[str, pd.DataFrame] = {}
+    if data_source == SOURCE_SYNTHETIC:
+        return {
+            waypoint.id: build_synthetic_ephemerides(
+                waypoint,
+                selected_date,
+                duration_days,
+                step_hours=3,
+            )
+            for waypoint in WAYPOINTS
+        }
+    if data_source == SOURCE_NASA_CACHED:
+        if (
+            selected_date != ROVER_CACHE_START_DATE
+            or duration_days != ROVER_CACHE_DURATION_DAYS
+        ):
+            raise ValueError(
+                "The bundled NASA cache is available only for 2026-11-14 UTC "
+                "and a 7-day observation period."
+            )
+        return {
+            waypoint.id: load_ephemeris_csv(
+                str(ROOT / "data" / "rover_nasa_cache" / f"{waypoint.id}.csv")
+            )
+            for waypoint in WAYPOINTS
+        }
+
+    for waypoint in WAYPOINTS:
+        try:
+            hourly = load_live(
+                waypoint.latitude_deg,
+                waypoint.longitude_deg_east,
+                selected_date.isoformat(),
+                duration_days * 24,
+            )
+            frames[waypoint.id] = downsample_ephemeris(hourly, step_hours=3)
+        except HorizonsError as error:
+            raise HorizonsResponseError(
+                f"{waypoint.id} ({format_latitude(waypoint.latitude_deg)}, "
+                f"{format_longitude(waypoint.longitude_deg_east)}) failed: {error}"
+            ) from error
+    return frames
+
+
+def render_solar_rover_planner() -> None:
+    """Render the synchronized, conceptual Shackleton rover scenario."""
+    render_header(
+        "Solar Rover Planner",
+        "Conceptual mobility planning with synchronized geometric Sun and Earth visibility.",
+    )
+
+    with st.container(border=True):
+        section_title("settings", "Rover Mission Configuration")
+        with st.form("rover_configuration", border=False):
+            date_col, duration_col, source_col, speed_col, action_col = st.columns(
+                [1.15, 0.85, 1.4, 0.9, 0.95], vertical_alignment="bottom"
+            )
+            with date_col:
+                selected_date = st.date_input(
+                    "Start Date (UTC)",
+                    value=date.today(),
+                    min_value=MIN_OBSERVATION_DATE,
+                    max_value=MAX_OBSERVATION_DATE,
+                    key="rover_start_date",
+                )
+            with duration_col:
+                duration_days = st.selectbox(
+                    "Observation Period",
+                    [7, 14, 28],
+                    index=0,
+                    format_func=lambda value: f"{value} days",
+                    key="rover_duration_days",
+                )
+            with source_col:
+                data_source = st.selectbox(
+                    "Scientific Data Source",
+                    [SOURCE_SYNTHETIC, SOURCE_NASA_CACHED, SOURCE_NASA_LIVE],
+                    key="rover_data_source",
+                    help=(
+                        "Live mode requests separate Sun and Earth observer tables "
+                        "for every waypoint. No synthetic values are mixed into it."
+                    ),
+                )
+            with speed_col:
+                rover_speed = st.selectbox(
+                    "Maximum Rover Speed",
+                    [0.1, 0.2, 0.5],
+                    index=1,
+                    format_func=lambda value: f"{value:.1f} km/h",
+                    key="rover_speed",
+                )
+            with action_col:
+                submitted = st.form_submit_button(
+                    "Build Mission Plan",
+                    type="primary",
+                    icon=":material/route:",
+                    width="stretch",
+                )
+
+        st.caption(
+            "Five conceptual nodes use lunar geodetic latitude and east-positive "
+            "longitude near Shackleton. Connections are not terrain-validated. "
+            "The bundled NASA cache covers 2026-11-14 UTC for 7 days."
+        )
+
+    requested_config = (
+        selected_date.isoformat(),
+        duration_days,
+        data_source,
+        rover_speed,
+    )
+    stored_plan = st.session_state.get("rover_plan")
+    should_build = submitted or stored_plan is None
+
+    if should_build:
+        try:
+            if data_source == SOURCE_NASA_LIVE:
+                with st.spinner(
+                    "Requesting cached-or-live Horizons ephemerides for five local waypoints..."
+                ):
+                    frames = build_rover_ephemerides(
+                        selected_date,
+                        duration_days,
+                        data_source,
+                    )
+            else:
+                frames = build_rover_ephemerides(
+                    selected_date,
+                    duration_days,
+                    data_source,
+                )
+            segments = plan_route(frames, rover_speed_kmh=rover_speed)
+            assert_route_constraints(segments, rover_speed_kmh=rover_speed)
+            st.session_state["rover_plan"] = {
+                "config": requested_config,
+                "frames": frames,
+                "segments": segments,
+                "source_label": data_source,
+                "new_live_result": data_source == SOURCE_NASA_LIVE,
+            }
+            stored_plan = st.session_state["rover_plan"]
+        except (HorizonsError, EphemerisValidationError, ValueError) as error:
+            st.session_state.pop("rover_plan", None)
+            st.error(
+                f"Rover scenario could not be built: {error}",
+                icon=":material/error:",
+            )
+            st.info(
+                "Live mode was not replaced with synthetic data. Select Synthetic "
+                "Demonstration explicitly if an offline scenario is needed."
+            )
+            return
+
+    if stored_plan is None:
+        return
+    if stored_plan["config"] != requested_config:
+        st.info(
+            "The visualization still shows the last completed scenario. Select "
+            "Build Mission Plan to apply the configuration above."
+        )
+
+    source_label = stored_plan["source_label"]
+    if source_label == SOURCE_NASA_LIVE and not stored_plan.get("new_live_result"):
+        source_label = SOURCE_NASA_CACHED
+    payload = build_component_payload(
+        stored_plan["frames"],
+        stored_plan["segments"],
+        source_label=source_label,
+        rover_speed_kmh=stored_plan["config"][3],
+        map_url=static_asset_url("shackleton-lroc.png"),
+    )
+    solar_rover_simulation(payload)
+    if stored_plan.get("new_live_result"):
+        stored_plan["new_live_result"] = False
+
+    if source_label == SOURCE_SYNTHETIC:
+        st.warning(
+            "This scenario uses deterministic synthetic demonstration curves. "
+            "They are site-distinct UI fixtures, not NASA ephemerides or a lunar "
+            "illumination prediction.",
+            icon=":material/science_off:",
+        )
+    else:
+        st.success(
+            f"{source_label}: separate observer ephemerides are aligned at three-hour samples.",
+            icon=":material/satellite_alt:",
+        )
+
+
 def render_mission_control(sites: list[dict]) -> None:
     render_header(
         "Lunar Landing Site Analysis",
@@ -1180,8 +1389,9 @@ dashboard_styles = """
     }
     [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(1) label:before { content: "⌂"; }
     [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(2) label:before { content: "⚖"; }
-    [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(3) label:before { content: "▤"; }
-    [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(4) label:before { content: "ⓘ"; }
+    [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(3) label:before { content: "⚙"; }
+    [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(4) label:before { content: "▤"; }
+    [data-testid="stSidebar"] [role="radiogroup"] > div:nth-child(5) label:before { content: "ⓘ"; }
     [data-testid="stSidebar"] [role="radiogroup"] label:hover {
       background: rgba(66,165,245,.10);
       border-color: rgba(66,165,245,.3);
@@ -1504,7 +1714,13 @@ with st.sidebar:
     )
     navigation = st.radio(
         "Navigation",
-        ["Mission Control", "Site Comparison", "Data & Sources", "About"],
+        [
+            "Mission Control",
+            "Site Comparison",
+            "Solar Rover Planner",
+            "Data & Sources",
+            "About",
+        ],
         key="navigation",
         label_visibility="collapsed",
     )
@@ -1518,6 +1734,8 @@ if navigation == "Mission Control":
     render_mission_control(sites)
 elif navigation == "Site Comparison":
     render_site_comparison(sites)
+elif navigation == "Solar Rover Planner":
+    render_solar_rover_planner()
 elif navigation == "Data & Sources":
     render_data_sources(sites)
 else:
