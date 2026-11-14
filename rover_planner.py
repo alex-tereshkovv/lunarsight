@@ -149,13 +149,17 @@ def interpolate_position(
     second: RoverWaypoint,
     fraction: float,
 ) -> tuple[float, float, float]:
-    """Linearly interpolate map position and return heading in degrees."""
+    """Linearly interpolate map position and return screen-space heading.
+
+    The rover SVG's local forward axis is +X.  Because SVG Y increases down the
+    screen, ``atan2(dy, dx)`` directly gives the clockwise rotation required to
+    keep the vehicle nose aligned with its direction of travel.
+    """
     progress = min(1.0, max(0.0, float(fraction)))
     dx, dy = second.map_x - first.map_x, second.map_y - first.map_y
     x = first.map_x + dx * progress
     y = first.map_y + dy * progress
-    # SVG Y increases downward; atan2(dx, -dy) makes 0 degrees point up.
-    heading = (degrees(atan2(dx, -dy)) + 360.0) % 360.0 if dx or dy else 0.0
+    heading = (degrees(atan2(dy, dx)) + 360.0) % 360.0 if dx or dy else 0.0
     return x, y, heading
 
 
