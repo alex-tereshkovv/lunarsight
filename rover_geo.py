@@ -20,6 +20,15 @@ LUNAR_SURFACE_DATA_BOOK_URL: Final = (
     "M2M-30044%20Lunar%20Surface%20Data%20Book%20Baseline_Final.pdf"
 )
 LOLA_LOCAL_DEM_URL: Final = "https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/"
+SHACKLETON_FEATURE_URL: Final = "https://planetarynames.wr.usgs.gov/Feature/5450"
+SHACKLETON_OVERVIEW_URL: Final = (
+    "https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/"
+)
+# Current IAU/USGS control-network values. The older nominal pole coordinate is
+# retained by the Gazetteer too, so recording the control network matters here.
+SHACKLETON_CENTER_LATITUDE_DEG: Final = -89.67
+SHACKLETON_CENTER_LONGITUDE_DEG_EAST: Final = 129.78
+SHACKLETON_DIAMETER_KM: Final = 20.92
 
 
 @dataclass(frozen=True)
@@ -86,6 +95,22 @@ def station_map_position(station: VerifiedStation) -> tuple[float, float]:
             station.longitude_deg_east,
         )
     )
+
+
+def shackleton_map_position() -> tuple[float, float]:
+    """Return the IAU Shackleton centre in the committed crop coordinates."""
+    return normalize_projected_position(
+        *project_south_polar_stereographic(
+            SHACKLETON_CENTER_LATITUDE_DEG,
+            SHACKLETON_CENTER_LONGITUDE_DEG_EAST,
+        )
+    )
+
+
+def shackleton_within_map() -> bool:
+    """Return whether the named crater centre lies inside the route-map crop."""
+    map_x, map_y = shackleton_map_position()
+    return 0.0 <= map_x <= 1.0 and 0.0 <= map_y <= 1.0
 
 
 def scale_bar_fraction(distance_km: float) -> float:

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_utc": "2026-11-14T11:07:38.137355+00:00",
   "image": "lola-shackleton-hillshade.webp",
   "image_size_px": [
@@ -28,5 +28,16 @@
     "https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/Site01/Site01_final_adj_5mpp_surf.tif",
     "https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/Site04/Site04_final_adj_5mpp_surf.tif"
   ],
-  "processing": "Site01/Site04 overlap feather-blended; long nonphysical raster-line spikes removed for display; terrain hillshade uses azimuth 315\u00b0 and elevation 45\u00b0. Hillshade is not timestamp-specific illumination."
+  "processing": "Site01/Site04 overlap feather-blended; long nonphysical raster-line spikes removed for display; terrain hillshade uses azimuth 315\u00b0 and elevation 45\u00b0. Hillshade is not timestamp-specific illumination.",
+  "shackleton_overview": {
+    "image": "shackleton-lroc.png",
+    "source": "https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/",
+    "feature_source": "https://planetarynames.wr.usgs.gov/Feature/5450",
+    "control_network_center": {
+      "latitude_deg": -89.67,
+      "longitude_deg_east": 129.78
+    },
+    "diameter_km": 20.92,
+    "note": "Separate-scale NASA multi-temporal regional overview. The IAU/USGS Shackleton centre is outside the main Site01/Site04 route crop; this overview is not timestamp-specific illumination."
+  }
 }

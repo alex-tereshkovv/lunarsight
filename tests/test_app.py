@@ -223,6 +223,21 @@ def test_solar_rover_cached_nasa_source_is_offline_and_explicit():
     )
 
 
+def test_continuous_exploration_is_explicit_demo_and_uses_no_network():
+    with patch("horizons.fetch_ephemeris") as fetch:
+        app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
+        app.radio[0].set_value("Solar Rover Planner").run(timeout=30)
+        widget_with_label(app.selectbox, "Planning Mode").set_value(
+            "CONTINUOUS_EXPLORATION"
+        )
+        app.form_submit_button[0].click().run(timeout=30)
+
+    assert not app.exception
+    assert not app.error
+    fetch.assert_not_called()
+    assert any("DEMONSTRATION MODE" in item.value for item in app.caption)
+
+
 def test_rover_live_failure_falls_back_only_to_explicit_matching_nasa_cache():
     with patch(
         "horizons.fetch_ephemeris",
