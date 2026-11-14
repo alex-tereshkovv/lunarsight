@@ -14,20 +14,34 @@ def test_rover_svg_has_six_wheels_and_mission_hardware():
 def test_animation_is_client_side_smooth_and_rotates_wheels():
     assert "requestAnimationFrame(frame)" in _JS
     assert "lerpAngle" in _JS
-    assert "Math.exp(-delta/78)" in _JS
-    assert "wheelAngle" in _JS
-    assert "if(rolling)" in _JS
+    assert "missionPose(ms)" in _JS
+    assert "ROVER_LOCAL_FORWARD_DEG=0" in _JS
+    assert "Math.atan2(to.y-from.y,to.x-from.x)" in _JS
+    assert "pose.travelledKm*1000" in _JS
+    assert "WHEEL_RADIUS_METRES" in _JS
+    assert _HTML.count('class="wheel-spinner"') == 6
     assert "Streamlit.setComponentValue" not in _JS
     assert "window.parent.postMessage" not in _JS
 
 
-def test_route_overlay_uses_curves_and_visual_hierarchy():
-    assert "function curvedRoute" in _JS
-    assert " Q " in _JS
+def test_route_overlay_and_rover_share_arc_length_geometry():
+    assert "function buildRouteGeometry" in _JS
+    assert "function pointAtArcFraction" in _JS
+    assert "function tangentHeading" in _JS
+    assert "routePath(geometry)" in _JS
+    assert "curvedRoute" not in _JS
+    assert " Q " not in _JS
     assert "route-network" in _CSS
     assert "route-active" in _CSS
     assert "route-progress" in _CSS
     assert "stroke-dasharray:9 7" in _CSS
+
+
+def test_all_visual_state_uses_one_mission_timestamp():
+    assert "const displayMs=previewMs??missionMs" in _JS
+    assert "syncData(displayMs" in _JS
+    assert "paintPose(target)" in _JS
+    assert "wheelSpinners.forEach" in _JS
 
 
 def test_spotlight_remains_explicitly_conceptual():
