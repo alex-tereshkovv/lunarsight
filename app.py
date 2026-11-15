@@ -1326,9 +1326,16 @@ def render_mission_control(sites: list[dict]) -> None:
             hide_index=True,
             alt="Displayed UTC Sun and Earth ephemeris samples",
         )
+        # Keep rolling Streamlit Cloud deployments compatible with a worker that
+        # has not re-imported ephemeris_export.py yet. The filename provenance is
+        # unchanged: both compatibility labels resolve to SYNTHETIC_DEMO.
+        export_source = {
+            REFERENCE_SOURCE: "Demo (Synthetic)",
+            REFERENCE_FALLBACK_SOURCE: "Demo (Fallback)",
+        }.get(actual_source, actual_source)
         export = build_ephemeris_export(
             frame,
-            data_source=actual_source,
+            data_source=export_source,
             site_id=site["id"],
             start_date=selected_date,
             duration_hours=duration,
