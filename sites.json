@@ -1,9 +1,13 @@
 {
-  "schema_version": 1,
-  "coordinate_convention": "Lunar geodetic latitude and east-positive longitude, degrees; demonstration values only.",
+  "schema_version": 2,
+  "coordinate_convention": "Lunar geodetic latitude and east-positive longitude in degrees. Coordinates are NASA-published representative traverse stations from M2M-30044 (2025); they are not validated landing sites or terrain-safe route points.",
   "sites": [
-    {"id": "demo_ridge_alpha", "name": "Demo Ridge Alpha", "latitude_deg": -89.4, "longitude_deg_east": 45.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false},
-    {"id": "demo_plateau_beta", "name": "Demo Plateau Beta", "latitude_deg": -88.8, "longitude_deg_east": 120.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false},
-    {"id": "demo_crater_rim_gamma", "name": "Demo Crater Rim Gamma", "latitude_deg": -89.1, "longitude_deg_east": 285.0, "scientific_source": "Synthetic demonstration coordinate; not a verified landing site.", "verified": false}
+    {"id": "CR1", "name": "Connecting Ridge — CR1", "latitude_deg": -89.468, "longitude_deg_east": 222.6, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "CR2", "name": "Connecting Ridge — CR2", "latitude_deg": -89.500, "longitude_deg_east": 222.1, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "CR3", "name": "Connecting Ridge — CR3", "latitude_deg": -89.418, "longitude_deg_east": 221.3, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "SR1", "name": "Shackleton Rim — SR1", "latitude_deg": -89.685, "longitude_deg_east": 196.7, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "SR2", "name": "Shackleton Rim — SR2", "latitude_deg": -89.740, "longitude_deg_east": 201.2, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "SR3", "name": "Shackleton Rim — SR3", "latitude_deg": -89.808, "longitude_deg_east": 205.9, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station; not a validated landing site.", "verified": true},
+    {"id": "PSR1", "name": "PSR Edge — PSR1", "latitude_deg": -89.575, "longitude_deg_east": 196.7, "scientific_source": "NASA Lunar Surface Data Book M2M-30044 (2025), representative traverse station near a permanently shadowed region; not a validated landing site.", "verified": true}
   ]
 }

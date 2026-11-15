@@ -6,8 +6,8 @@
 
 LunarSight is an interactive Streamlit application for comparing the apparent
 positions of the Sun and Earth above candidate locations near the lunar south
-pole. It combines NASA JPL Horizons observer ephemerides with an offline
-demonstration mode for reliable hackathon presentations.
+pole. It combines NASA JPL Horizons observer ephemerides with an offline,
+explicitly synthetic reference profile for reliable hackathon presentations.
 
 LunarSight is a NASA Space Apps-style educational prototype. It is not
 affiliated with or endorsed by NASA and is not a flight-certified mission
@@ -24,13 +24,13 @@ score.
 ## Main features
 
 - Live Sun and Earth azimuth/elevation from NASA JPL Horizons.
-- Clearly labelled synthetic demo mode that works without a network.
+- Clearly labelled synthetic reference profile that works without a network.
 - Landing-site, UTC start-date, and 24/48/72-hour mission configuration.
 - Interactive Plotly elevation and direction visualizations.
 - Matched-period comparison of two lunar surface observers.
 - Synchronized Solar Rover Planner with seven published NASA representative-
   traverse stations, UTC scrubbing, loop playback, and separate Visibility
-  Optimization and demonstration-only Continuous Exploration modes.
+  Optimization and conceptual Continuous Exploration modes.
 - Georeferenced terrain hillshade preprocessed from NASA PGDA Site01/Site04
   LOLA 5 m/pixel DEMs in lunar south-polar stereographic metres.
 - Explicitly manifested offline NASA cache for the seven rover stations over
@@ -92,7 +92,7 @@ update process.
 
 ## Five-minute demonstration workflow
 
-1. Open **Mission Control** in `Demo (Synthetic)` mode to show the dashboard,
+1. Open **Mission Control** with `Reference Profile (Synthetic)` to show the dashboard,
    observation-time control, data table, and CSV export without relying on the
    network.
 2. Point out the synthetic source label and `SYNTHETIC_DEMO` filename marker.
@@ -109,7 +109,7 @@ update process.
 6. Open **Data & Sources** and **About** to explain provenance and limitations.
 
 If Horizons is unavailable, Mission Control reports the error and changes to a
-clearly labelled `Demo (Fallback)` dataset. Site Comparison never mixes live
+clearly labelled `Reference Profile (Synthetic Fallback)` dataset. Site Comparison never mixes live
 NASA data for one site with synthetic data for the other.
 
 ## Data contract and coordinate convention
@@ -170,7 +170,7 @@ with Shackleton at its published centre. The inset is context only, not the
 route-map scale and not timestamp-specific sunlight.
 
 Visibility Optimization uses the real station ephemerides to make conservative
-geometric visibility decisions. Continuous Exploration is a demonstration-only
+geometric visibility decisions. Continuous Exploration is a conceptual
 closed walk along explicit graph links and does not claim optimality. Because
 the NASA traverse polylines have not been digitized into LunarSight, all drawn
 links remain straight conceptual connectors between published stations. Their
@@ -189,13 +189,13 @@ zero-degree local horizon:
 - Elevation describes the center of the Sun or Earth, not its full disk.
 - Landing hazards, slopes, thermal conditions, navigation uncertainty, and
   operational safety margins are outside the current model.
-- Catalog coordinates are explicitly demonstration locations and are not
-  verified landing sites.
+- Catalog coordinates are NASA-published representative traverse stations from
+  M2M-30044 (2025), not validated landing sites or terrain-safe route points.
 - Solar Rover Planner station coordinates are published NASA representative-
   traverse locations. The dashed connector is conceptual and is not the NASA
   route polyline or a terrain/traversability product.
 - Continuous Exploration selects a closed conceptual station walk that fits the
-  selected mission period. Its repeated playback is an interface demonstration,
+  selected mission period. Its repeated playback is an interface visualization,
   not a visibility optimum or an autonomous-navigation result.
 - The LOLA-derived background is a terrain hillshade, not real-time sunlight.
   The historical NASA
@@ -205,8 +205,6 @@ zero-degree local horizon:
   speed, explicit local links, and a conservative visibility-window heuristic.
   It does not model slope, wheel slip, energy storage, thermal constraints,
   hazards, or optimal real-world navigation.
-- Pending mission metrics remain placeholders until `analysis.py` is
-  implemented and scientifically reviewed.
 
 ## Project structure
 
@@ -220,8 +218,7 @@ zero-degree local horizon:
   normalization, and projected scale-bar helpers.
 - `rover_component.py` — Streamlit Components v2 map/timeline renderer using a
   single client-side simulation clock.
-- `analysis.py` — reserved interface for mission-analysis algorithms.
-- `sites.json` — demonstration landing-site catalog.
+- `sites.json` — NASA-published representative traverse-station catalog.
 - `data/demo_ephemeris.csv` — bundled offline synthetic data.
 - `data/rover_nasa_cache/` — validated, locally stored Horizons tables and a
   provenance manifest for the fixed 2026-11-14 seven-day rover scenario.

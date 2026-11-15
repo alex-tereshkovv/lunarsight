@@ -12,6 +12,8 @@ import pandas as pd
 CSV_MIME_TYPE = "text/csv;charset=utf-8"
 SOURCE_FILENAME_LABELS = {
     "NASA JPL Horizons (Live)": "NASA_LIVE",
+    "Reference Profile (Synthetic)": "SYNTHETIC_DEMO",
+    "Reference Profile (Synthetic Fallback)": "SYNTHETIC_DEMO",
     "Demo (Synthetic)": "SYNTHETIC_DEMO",
     "Demo (Fallback)": "SYNTHETIC_DEMO",
 }

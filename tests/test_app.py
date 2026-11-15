@@ -26,26 +26,26 @@ def live_comparison_frame(start_date: str, offset: float) -> pd.DataFrame:
     })
 
 
-def test_demo_mode_renders_both_elevation_charts_without_network():
+def test_reference_profile_renders_both_elevation_charts_without_network():
     app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
     assert not app.exception
     assert len(app.get("plotly_chart")) == 2
     download = app.get("download_button")[0]
     assert download.label == "Download Ephemeris CSV"
     assert download.proto.ignore_rerun is True
-    assert sum("Analysis pending" in item.value for item in app.markdown) == 4
-    assert any("Demo (Synthetic)" in item.value for item in app.markdown)
+    assert not any("Analysis pending" in item.value for item in app.markdown)
+    assert any("Reference Profile (Synthetic)" in item.value for item in app.markdown)
 
 
 def test_mission_configuration_controls_update():
     app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
-    widget_with_label(app.selectbox, "Landing Site").set_value("Demo Plateau Beta")
+    widget_with_label(app.selectbox, "Landing Site").set_value("Connecting Ridge — CR2")
     widget_with_label(app.selectbox, "Duration").set_value(24)
     app.date_input[0].set_value(date(2026, 11, 15))
     app.run(timeout=30)
 
     assert not app.exception
-    assert widget_with_label(app.selectbox, "Landing Site").value == "Demo Plateau Beta"
+    assert widget_with_label(app.selectbox, "Landing Site").value == "Connecting Ridge — CR2"
     assert widget_with_label(app.selectbox, "Duration").value == 24
     assert app.date_input[0].value == date(2026, 11, 15)
     assert len(app.get("plotly_chart")) == 2
@@ -104,7 +104,7 @@ def test_live_network_error_falls_back_to_demo_charts():
     assert len(app.error) == 1
     assert "offline test" in app.error[0].value
     assert len(app.get("plotly_chart")) == 2
-    assert any("Demo (Fallback)" in item.value for item in app.markdown)
+    assert any("Reference Profile (Synthetic Fallback)" in item.value for item in app.markdown)
 
 
 def test_live_mission_control_uses_selected_site_period_and_nasa_label():
@@ -113,7 +113,7 @@ def test_live_mission_control_uses_selected_site_period_and_nasa_label():
         app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
         app.date_input[0].set_value(date(2045, 8, 1)).run(timeout=30)
         widget_with_label(app.selectbox, "Landing Site").set_value(
-            "Demo Crater Rim Gamma"
+            "Shackleton Rim — SR1"
         )
         widget_with_label(app.selectbox, "Duration").set_value(24)
         widget_with_label(app.segmented_control, "Data Source").set_value(
@@ -124,7 +124,7 @@ def test_live_mission_control_uses_selected_site_period_and_nasa_label():
     assert not app.exception
     assert not app.error
     assert fetch.call_count == 1
-    assert fetch.call_args.args[:2] == (-89.1, 285.0)
+    assert fetch.call_args.args[:2] == (-89.685, 196.7)
     assert fetch.call_args.args[2].isoformat() == "2045-08-01T00:00:00+00:00"
     assert fetch.call_args.args[3].isoformat() == "2045-08-02T00:00:00+00:00"
     assert any("NASA JPL Horizons (Live)" in item.value for item in app.markdown)
@@ -148,7 +148,7 @@ def test_live_invalid_table_falls_back_to_clearly_labeled_demo():
     assert not app.exception
     assert len(app.error) == 1
     assert "violates the LunarSight schema" in app.error[0].value
-    assert any("Demo (Fallback)" in item.value for item in app.markdown)
+    assert any("Reference Profile (Synthetic Fallback)" in item.value for item in app.markdown)
     assert len(app.get("plotly_chart")) == 2
 
 
@@ -235,7 +235,7 @@ def test_continuous_exploration_is_explicit_demo_and_uses_no_network():
     assert not app.exception
     assert not app.error
     fetch.assert_not_called()
-    assert any("DEMONSTRATION MODE" in item.value for item in app.caption)
+    assert any("CONCEPTUAL MODE" in item.value for item in app.caption)
 
 
 def test_rover_live_failure_falls_back_only_to_explicit_matching_nasa_cache():
@@ -267,10 +267,10 @@ def test_live_site_comparison_uses_each_site_coordinates_and_shared_period():
         app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
         app.radio[0].set_value("Site Comparison").run(timeout=30)
         widget_with_label(app.selectbox, "Landing Site A").set_value(
-            "Demo Ridge Alpha"
+            "Connecting Ridge — CR1"
         )
         widget_with_label(app.selectbox, "Landing Site B").set_value(
-            "Demo Plateau Beta"
+            "Connecting Ridge — CR2"
         )
         widget_with_label(app.selectbox, "Duration").set_value(24)
         app.date_input[0].set_value(date(2042, 5, 1))
@@ -283,8 +283,8 @@ def test_live_site_comparison_uses_each_site_coordinates_and_shared_period():
         assert any("Above ideal horizon" in item.value for item in app.markdown)
 
         first_call, second_call = fetch.call_args_list
-        assert first_call.args[:2] == (-89.4, 45.0)
-        assert second_call.args[:2] == (-88.8, 120.0)
+        assert first_call.args[:2] == (-89.468, 222.6)
+        assert second_call.args[:2] == (-89.5, 222.1)
         assert first_call.args[2:] == second_call.args[2:]
 
         widget_with_label(
@@ -309,7 +309,7 @@ def test_comparison_reports_failed_site_without_synthetic_fallback():
 
     assert not app.exception
     assert len(app.error) == 1
-    assert "Site B (Demo Plateau Beta) failed" in app.error[0].value
+    assert "Site B (Connecting Ridge — CR2) failed" in app.error[0].value
     assert len(app.get("plotly_chart")) == 0
     assert any("did not substitute synthetic data" in item.value for item in app.info)
 
@@ -319,7 +319,7 @@ def test_demo_site_comparison_is_explicitly_disabled_without_network():
         app = AppTest.from_file(ROOT / "app.py").run(timeout=30)
         app.radio[0].set_value("Site Comparison").run(timeout=30)
         widget_with_label(app.selectbox, "Data Source").set_value(
-            "Demo (Synthetic)"
+            "Reference Profile (Synthetic)"
         )
         app.form_submit_button[0].click().run(timeout=30)
 
@@ -344,7 +344,8 @@ def test_mobile_css_does_not_reserve_desktop_sidebar_width():
 
 def test_ui_uses_scientifically_qualified_visibility_language():
     source = (ROOT / "app.py").read_text(encoding="utf-8")
-    assert "Sunlight Availability" in source
-    assert "Geometric proxy only; terrain not modeled" in source
-    assert "Not a communications link budget" in source
+    assert "Analysis pending" not in source
+    assert "Awaiting analysis.py" not in source
+    assert "not validated landing sites or terrain-safe route points" in source
+    assert "Geometric Earth visibility does not guarantee reliable radio communication" in source
     assert "not a flight-certified mission design system" in source

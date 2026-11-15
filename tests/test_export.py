@@ -46,8 +46,8 @@ def test_csv_export_preserves_columns_utc_and_float_precision():
     ("data_source", "expected_label"),
     [
         ("NASA JPL Horizons (Live)", "NASA_LIVE"),
-        ("Demo (Synthetic)", "SYNTHETIC_DEMO"),
-        ("Demo (Fallback)", "SYNTHETIC_DEMO"),
+        ("Reference Profile (Synthetic)", "SYNTHETIC_DEMO"),
+        ("Reference Profile (Synthetic Fallback)", "SYNTHETIC_DEMO"),
     ],
 )
 def test_filename_identifies_actual_source(data_source, expected_label):
@@ -77,8 +77,8 @@ def test_unknown_source_is_never_silently_labeled_as_nasa():
 def test_filename_rejects_invalid_duration(duration_hours):
     with pytest.raises(ValueError, match="positive integer"):
         build_export_filename(
-            data_source="Demo (Synthetic)",
-            site_id="demo_ridge_alpha",
+            data_source="Reference Profile (Synthetic)",
+            site_id="CR1",
             start_date=date(2026, 11, 15),
             duration_hours=duration_hours,
         )
@@ -87,7 +87,7 @@ def test_filename_rejects_invalid_duration(duration_hours):
 def test_complete_export_uses_utf8_csv_and_sanitizes_site_identifier():
     export = build_ephemeris_export(
         sample_ephemeris(),
-        data_source="Demo (Synthetic)",
+        data_source="Reference Profile (Synthetic)",
         site_id="south pole / candidate 1",
         start_date=date(2026, 11, 15),
         duration_hours=72,

@@ -35,7 +35,7 @@ from rover_geo import (
 MOON_RADIUS_KM: Final = 1737.4
 SOURCE_NASA_LIVE: Final = "NASA JPL Horizons — Live"
 SOURCE_NASA_CACHED: Final = "NASA JPL Horizons — Cached"
-SOURCE_SYNTHETIC: Final = "Synthetic Demonstration"
+SOURCE_SYNTHETIC: Final = "Conceptual Scientific Layer (Synthetic)"
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ CONTINUOUS_EXPLORATION_SCENARIO: Final = RoverRouteScenario(
     "Continuous Exploration",
     tuple(waypoint.id for waypoint in WAYPOINTS),
     None,
-    "Demonstration-only closed walk on conceptual verified-station links",
+    "Conceptual closed walk on published-station links; not a validated traverse",
 )
 # These edges form a transparent planning graph between published stations.  They
 # are display/planning links only: the Moon has not signed off on our shortcuts.
@@ -495,7 +495,7 @@ def plan_continuous_exploration(
                     second,
                     0.0,
                     False,
-                    f"Demonstration pause at verified station {second}.",
+                    f"Planned pause at published station {second}.",
                 ))
                 cursor = pause_end
         cycle_index += 1

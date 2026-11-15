@@ -48,6 +48,10 @@ MIN_OBSERVATION_DATE = date(2000, 1, 1)
 MAX_OBSERVATION_DATE = date(2100, 12, 31)
 ROVER_CACHE_START_DATE = date(2026, 11, 14)
 ROVER_CACHE_DURATION_DAYS = 7
+LIVE_SOURCE = "Live NASA (Horizons)"
+NASA_SOURCE_LABEL = "NASA JPL Horizons (Live)"
+REFERENCE_SOURCE = "Reference Profile (Synthetic)"
+REFERENCE_FALLBACK_SOURCE = "Reference Profile (Synthetic Fallback)"
 
 
 def static_asset_url(filename: str, app_url: str | None = None) -> str:
@@ -221,7 +225,7 @@ def elevation_chart(frame: pd.DataFrame) -> go.Figure:
     maximum = max(frame["sun_el"].max(), frame["earth_el"].max(), 0)
     padding = max(1.0, (maximum - minimum) * 0.18)
     figure.update_layout(
-        height=210,
+        height=390,
         margin={"l": 10, "r": 10, "t": 12, "b": 8},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(7,17,31,0.35)",
@@ -272,7 +276,7 @@ def direction_chart(row: pd.Series) -> go.Figure:
         name="Sun",
         marker={
             "color": COLORS["sun"],
-            "size": 14,
+            "size": 18,
             "line": {"color": "#FFF3B8", "width": 2},
         },
         customdata=[[row["sun_el"]]],
@@ -288,7 +292,7 @@ def direction_chart(row: pd.Series) -> go.Figure:
         name="Earth",
         marker={
             "color": COLORS["earth"],
-            "size": 14,
+            "size": 18,
             "line": {"color": "#C6ECFF", "width": 2},
         },
         customdata=[[row["earth_el"]]],
@@ -298,8 +302,8 @@ def direction_chart(row: pd.Series) -> go.Figure:
         ),
     ))
     figure.update_layout(
-        height=160,
-        margin={"l": 14, "r": 14, "t": 18, "b": 10},
+        height=330,
+        margin={"l": 30, "r": 30, "t": 30, "b": 25},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={"color": COLORS["text"], "family": "Inter, Segoe UI, sans-serif"},
@@ -312,6 +316,7 @@ def direction_chart(row: pd.Series) -> go.Figure:
                 "tickmode": "array",
                 "tickvals": [0, 90, 180, 270],
                 "ticktext": ["N · 0°", "E · 90°", "S · 180°", "W · 270°"],
+                "tickfont": {"size": 13},
                 "gridcolor": "#365572",
                 "linecolor": "#5F7893",
             },
@@ -323,6 +328,7 @@ def direction_chart(row: pd.Series) -> go.Figure:
                 "gridcolor": "#365572",
                 "linecolor": "#5F7893",
                 "angle": 45,
+                "tickfont": {"size": 11},
             },
         },
     )
@@ -361,19 +367,6 @@ def section_title(icon: str, title: str, detail: str | None = None) -> None:
         f'<div class="section-heading"><b>{icon_svg(icon, 20)}{title}</b>{suffix}</div>',
         unsafe_allow_html=True,
     )
-
-
-def metric_card(css_class: str, icon: str, title: str, description: str) -> str:
-    return f"""
-    <div class="metric-card {css_class}">
-      <div class="metric-icon">{icon_svg(icon, 42)}</div>
-      <div>
-        <div class="metric-label">{title}</div>
-        <div class="metric-value">Analysis pending</div>
-        <div class="metric-help">{description}</div>
-      </div>
-    </div>
-    """
 
 
 def direction_details(name: str, azimuth: float, elevation: float, css_class: str) -> str:
@@ -630,7 +623,8 @@ def render_live_comparison_result(result: dict) -> None:
 
         st.caption(
             "Instantaneous geometric elevation relative to an ideal local horizon. "
-            "Mission-window metrics will be added through analysis.calculate_visibility()."
+            "Terrain masking, illumination duration, and communications link quality "
+            "are outside this comparison."
         )
 
 
@@ -690,7 +684,7 @@ def render_site_comparison(sites: list[dict], embedded: bool = False) -> None:
         with source_col:
             data_source = st.selectbox(
                 "Data Source",
-                ["Live NASA (Horizons)", "Demo (Synthetic)"],
+                [LIVE_SOURCE, REFERENCE_SOURCE],
                 key="comparison_source",
             )
         submitted = st.form_submit_button(
@@ -709,7 +703,7 @@ def render_site_comparison(sites: list[dict], embedded: bool = False) -> None:
             st.session_state[error_key] = (
                 "Select two different landing sites before requesting a comparison."
             )
-        elif data_source == "Demo (Synthetic)":
+        elif data_source == REFERENCE_SOURCE:
             st.session_state[result_key] = {
                 "source": data_source,
                 "site_a": site_a,
@@ -758,13 +752,13 @@ def render_site_comparison(sites: list[dict], embedded: bool = False) -> None:
             "Choose two sites and run the comparison. Live requests are cached, and "
             "changing the observation-time slider will not call NASA again."
         )
-    elif comparison_result["source"] == "Demo (Synthetic)":
+    elif comparison_result["source"] == REFERENCE_SOURCE:
         with st.container(border=True):
-            section_title("warning", "Synthetic Comparison Disabled")
+            section_title("warning", "Reference Profile Comparison Disabled")
             st.warning(
-                "The bundled demo file is one shared synthetic trajectory and is not "
+                "The bundled reference profile is one shared synthetic trajectory and is not "
                 "site-specific. Plotting it for both locations would imply a false "
-                "scientific comparison, so comparison charts are disabled in demo mode."
+                "scientific comparison, so comparison charts are disabled for this source."
             )
             demo_columns = st.columns(2)
             for column, label, site in (
@@ -788,7 +782,8 @@ def render_scientific_notes() -> None:
               local terrain and shadowing are not modeled.</li>
               <li>Geometric Earth visibility does not guarantee reliable radio communication.</li>
               <li>Elevation refers to the center of the observed celestial body.</li>
-              <li>Demonstration landing sites are not scientifically verified.</li>
+              <li>Catalog coordinates are NASA-published representative traverse stations,
+              not validated landing sites or terrain-safe route points.</li>
             </ul>
             """,
             unsafe_allow_html=True,
@@ -820,9 +815,9 @@ def render_data_sources(sites: list[dict]) -> None:
             )
     with right:
         with st.container(border=True):
-            section_title("database", "Offline Demo Data")
+            section_title("database", "Offline Reference Profile")
             st.write(
-                "The bundled CSV is synthetic and exists only to keep the dashboard "
+                "The bundled CSV is an explicitly synthetic reference profile that keeps the dashboard "
                 "functional without network access."
             )
             st.code("time_utc, sun_az, sun_el, earth_az, earth_el")
@@ -834,14 +829,14 @@ def render_data_sources(sites: list[dict]) -> None:
             "Site": site["name"],
             "Latitude": format_latitude(site["latitude_deg"]),
             "Longitude": format_longitude(site["longitude_deg_east"]),
-            "Verified": site["verified"],
+            "NASA-published station": site["verified"],
             "Source": site["scientific_source"],
         } for site in sites])
         st.dataframe(
             catalog,
             hide_index=True,
             width="stretch",
-            alt="Landing-site coordinates, verification status, and scientific source",
+            alt="NASA-published station coordinates and scientific source",
         )
 
 
@@ -861,10 +856,10 @@ def render_about() -> None:
             """
             **Current capabilities**
 
-            - Offline synthetic demonstration mode
+            - Offline reference profile (explicitly synthetic)
             - Live NASA JPL Horizons ephemerides
             - Interactive elevation and direction visualizations
-            - Shared data contract for the future mission analysis module
+            - CSV export of the currently displayed ephemeris table
 
             **Not currently modeled**
 
@@ -899,7 +894,7 @@ def fetch_selected_data(
     duration: int,
 ) -> tuple[pd.DataFrame | None, str, str | None]:
     """Return selected data, actual source label, and any fallback error."""
-    if data_source == "Live NASA (Horizons)":
+    if data_source == LIVE_SOURCE:
         try:
             with st.spinner(
                 "Requesting Sun and Earth ephemerides from NASA JPL Horizons..."
@@ -910,16 +905,16 @@ def fetch_selected_data(
                     selected_date.isoformat(),
                     duration,
                 )
-            return frame, "NASA JPL Horizons (Live)", None
+            return frame, NASA_SOURCE_LABEL, None
         except HorizonsError as error:
             frame, demo_error = load_demo_for_period(selected_date, duration)
             if demo_error:
                 return None, "Unavailable", f"{error}; {demo_error}"
-            return frame, "Demo (Fallback)", str(error)
+            return frame, REFERENCE_FALLBACK_SOURCE, str(error)
     frame, demo_error = load_demo_for_period(selected_date, duration)
     if demo_error:
         return None, "Unavailable", demo_error
-    return frame, "Demo (Synthetic)", None
+    return frame, REFERENCE_SOURCE, None
 
 
 def build_rover_ephemerides(
@@ -1008,7 +1003,7 @@ def render_solar_rover_planner() -> None:
                 key="rover_route",
                 help=(
                     "Visibility Optimization evaluates real ephemerides. Continuous "
-                    "Exploration is a demonstration-only closed playback route. "
+                    "Exploration is a conceptual closed playback route. "
                     "All graph links are conceptual, not terrain-validated."
                 ),
             )
@@ -1154,7 +1149,7 @@ def render_solar_rover_planner() -> None:
             icon=":material/cloud_off:",
         )
     mode_note = (
-        "DEMONSTRATION MODE — cyclic station exploration; no optimality or "
+        "CONCEPTUAL MODE — cyclic station exploration; no optimality or "
         "terrain-safety claim."
         if scenario.id == CONTINUOUS_EXPLORATION_ID
         else "SCIENTIFIC MODE — movement decisions use geometric Horizons visibility."
@@ -1168,7 +1163,7 @@ def render_solar_rover_planner() -> None:
 def render_mission_control(sites: list[dict]) -> None:
     render_header(
         "Lunar Landing Site Analysis",
-        "Solar illumination, Earth visibility, and mission windows for lunar surface operations.",
+        "Geometric Sun and Earth visibility for lunar surface operations.",
     )
 
     with st.container(border=True):
@@ -1206,11 +1201,11 @@ def render_mission_control(sites: list[dict]) -> None:
         with source_col:
             data_source = st.segmented_control(
                 "Data Source",
-                ["Demo (Synthetic)", "Live NASA (Horizons)"],
-                default="Demo (Synthetic)",
+                [REFERENCE_SOURCE, LIVE_SOURCE],
+                default=REFERENCE_SOURCE,
                 required=True,
                 format_func=lambda source: (
-                    "Demo (Synthetic)" if source.startswith("Demo") else "Live NASA"
+                    "Synthetic Reference" if source == REFERENCE_SOURCE else "Live NASA"
                 ),
                 key="mission_source",
                 width="stretch",
@@ -1244,34 +1239,11 @@ def render_mission_control(sites: list[dict]) -> None:
 
     if live_error:
         st.error(f"Live Horizons request failed: {live_error}")
-        st.info("The dashboard switched to clearly labeled synthetic demo data.")
+        st.info("The dashboard switched to the clearly labeled synthetic reference profile.")
 
     source_class = "source-live" if actual_source.startswith("NASA") else "source-demo"
 
-    with st.container(border=True):
-        section_title("metrics", "Mission Metrics", "Awaiting analysis.py")
-        metric_columns = st.columns(4)
-        cards = [
-            metric_card(
-                "sun",
-                "sun",
-                "Sunlight Availability",
-                "Geometric proxy only; terrain not modeled",
-            ),
-            metric_card(
-                "earth",
-                "earth",
-                "Earth Visibility",
-                "Not a communications link budget",
-            ),
-            metric_card("both", "overlap", "Simultaneous Visibility", "After connecting analysis.py"),
-            metric_card("window", "clock", "Longest Continuous Window", "After connecting analysis.py"),
-        ]
-        for column, card in zip(metric_columns, cards):
-            with column:
-                st.markdown(card, unsafe_allow_html=True)
-
-    chart_column, direction_column = st.columns([1.9, 1])
+    chart_column, direction_column = st.columns([1.45, 1.35])
     with chart_column:
         with st.container(border=True):
             section_title("trend", "Sun & Earth Elevation")
@@ -1295,7 +1267,7 @@ def render_mission_control(sites: list[dict]) -> None:
                 key="mission_observation_time",
             )
             selected_row = frame.loc[frame["time_utc"] == selected_time].iloc[0]
-            direction_visual, direction_data = st.columns([1.15, 1])
+            direction_visual, direction_data = st.columns([1.25, 1])
             with direction_visual:
                 st.plotly_chart(
                     direction_chart(selected_row),
@@ -1616,47 +1588,25 @@ dashboard_styles = """
     .source-banner span { color: var(--muted); }
     .source-live { background: rgba(38,194,129,.1); border-color: rgba(38,194,129,.55); }
     .source-demo { background: rgba(255,200,69,.08); border-color: rgba(255,200,69,.42); }
-    .metric-card {
-      min-height: 88px;
-      display: flex;
-      align-items: center;
-      gap: .8rem;
-      padding: .62rem .75rem;
-      border: 1px solid;
-      border-radius: 11px;
-      background: rgba(7,17,31,.52);
-    }
-    .metric-card.sun { border-color: #E4B91F; box-shadow: inset 0 0 22px rgba(255,200,69,.08); }
-    .metric-card.earth { border-color: #2AADEB; box-shadow: inset 0 0 22px rgba(66,180,255,.08); }
-    .metric-card.both { border-color: #B76CE1; box-shadow: inset 0 0 22px rgba(183,108,225,.08); }
-    .metric-card.window { border-color: #83A9CF; box-shadow: inset 0 0 22px rgba(131,169,207,.08); }
-    .metric-icon { align-items: center; display: flex; line-height: 1; }
-    .metric-card.sun .metric-icon { color: var(--sun); }
-    .metric-card.earth .metric-icon { color: var(--earth); }
-    .metric-card.both .metric-icon { color: #C584ED; }
-    .metric-card.window .metric-icon { color: #9EC3E7; }
-    .metric-label { color: #D8E3EE; font-size: .75rem; font-weight: 800; }
-    .metric-value { color: var(--text); font-size: .98rem; font-weight: 800; margin: .1rem 0; }
-    .metric-help { color: var(--muted); font-size: .69rem; }
     .direction-card {
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: .42rem .55rem;
-      min-height: 82px;
+      padding: .72rem .78rem;
+      min-height: 112px;
       background: rgba(7,17,31,.52);
       color: #C8D5E3;
-      font-size: .7rem;
+      font-size: .82rem;
     }
     .direction-card.sun { box-shadow: inset 3px 0 var(--sun); }
     .direction-card.earth { box-shadow: inset 3px 0 var(--earth); }
-    .direction-name { color: var(--text); font-size: .82rem; font-weight: 800; margin-bottom: .16rem; }
+    .direction-name { color: var(--text); font-size: 1rem; font-weight: 800; margin-bottom: .32rem; }
     .direction-card b { color: var(--text); float: right; }
     .visibility-pill {
       display: inline-block;
       margin-top: .2rem;
       padding: .16rem .45rem;
       border-radius: 99px;
-      font-size: .64rem;
+      font-size: .72rem;
       font-weight: 800;
     }
     .visibility-pill.above { background: #128548; color: #E5FFF0; }
@@ -1735,7 +1685,6 @@ dashboard_styles = """
       }
       .hero-status { display: none; }
       .mission-hero { min-height: 88px; padding-left: .2rem; }
-      .metric-card { min-height: 98px; }
       .source-banner {
         align-items: flex-start;
         flex-direction: column;

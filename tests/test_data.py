@@ -38,11 +38,16 @@ def test_validation_rejects_incomplete_ephemeris():
         validate_ephemeris(frame)
 
 
-def test_sites_are_explicitly_unverified_demonstrations():
+def test_sites_are_published_nasa_stations_with_qualified_scope():
     catalog = json.loads((ROOT / "sites.json").read_text(encoding="utf-8"))
     assert "east-positive longitude" in catalog["coordinate_convention"]
     assert catalog["sites"]
-    assert all(site["verified"] is False for site in catalog["sites"])
-    assert all("Synthetic" in site["scientific_source"] for site in catalog["sites"])
+    assert catalog["schema_version"] == 2
+    assert {site["id"] for site in catalog["sites"]} == {
+        "CR1", "CR2", "CR3", "SR1", "SR2", "SR3", "PSR1"
+    }
+    assert all(site["verified"] is True for site in catalog["sites"])
+    assert all("NASA Lunar Surface Data Book" in site["scientific_source"] for site in catalog["sites"])
+    assert all("not a validated landing site" in site["scientific_source"] for site in catalog["sites"])
     assert all(-90 <= site["latitude_deg"] <= 90 for site in catalog["sites"])
     assert all(0 <= site["longitude_deg_east"] < 360 for site in catalog["sites"])
