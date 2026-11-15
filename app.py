@@ -1243,58 +1243,70 @@ def render_mission_control(sites: list[dict]) -> None:
 
     source_class = "source-live" if actual_source.startswith("NASA") else "source-demo"
 
-    chart_column, direction_column = st.columns([1.45, 1.35])
-    with chart_column:
-        with st.container(border=True):
-            section_title("trend", "Sun & Earth Elevation")
-            st.plotly_chart(
-                elevation_chart(frame),
-                key="elevation_chart",
-                width="stretch",
-                config={"displaylogo": False, "scrollZoom": False},
-                alt="Sun and Earth elevation relative to the ideal local horizon over UTC",
-            )
-
-    with direction_column:
-        with st.container(border=True):
-            default_time = frame["time_utc"].iloc[len(frame) // 2]
-            section_title("target", "Current Direction", "Interactive UTC geometry")
-            selected_time = st.select_slider(
-                "Observation Time (UTC)",
-                options=frame["time_utc"].tolist(),
-                value=default_time,
-                format_func=format_timestamp,
-                key="mission_observation_time",
-            )
-            selected_row = frame.loc[frame["time_utc"] == selected_time].iloc[0]
-            direction_visual, direction_data = st.columns([1.25, 1])
-            with direction_visual:
+    with st.container(key="mission_visualizations"):
+        chart_column, direction_column = st.columns([52, 48], gap="small")
+        with chart_column:
+            with st.container(
+                border=True,
+                key="mission_elevation_panel",
+                height="stretch",
+            ):
+                section_title("trend", "Sun & Earth Elevation")
                 st.plotly_chart(
-                    direction_chart(selected_row),
-                    key="direction_chart",
+                    elevation_chart(frame),
+                    key="elevation_chart",
                     width="stretch",
-                    config={"displayModeBar": False, "displaylogo": False},
-                    alt="Current Sun and Earth azimuth and elevation around the lunar observer",
+                    config={"displaylogo": False, "scrollZoom": False},
+                    alt="Sun and Earth elevation relative to the ideal local horizon over UTC",
                 )
-            with direction_data:
-                st.markdown(
-                    direction_details(
-                        "Sun",
-                        selected_row["sun_az"],
-                        selected_row["sun_el"],
-                        "sun",
-                    ),
-                    unsafe_allow_html=True,
+
+        with direction_column:
+            with st.container(
+                border=True,
+                key="mission_direction_panel",
+                height="stretch",
+            ):
+                default_time = frame["time_utc"].iloc[len(frame) // 2]
+                section_title("target", "Current Direction", "Interactive UTC geometry")
+                selected_time = st.select_slider(
+                    "Observation Time (UTC)",
+                    options=frame["time_utc"].tolist(),
+                    value=default_time,
+                    format_func=format_timestamp,
+                    key="mission_observation_time",
                 )
-                st.markdown(
-                    direction_details(
-                        "Earth",
-                        selected_row["earth_az"],
-                        selected_row["earth_el"],
-                        "earth",
-                    ),
-                    unsafe_allow_html=True,
+                selected_row = frame.loc[frame["time_utc"] == selected_time].iloc[0]
+                direction_visual, direction_data = st.columns(
+                    [1.25, 1],
+                    vertical_alignment="center",
                 )
+                with direction_visual:
+                    st.plotly_chart(
+                        direction_chart(selected_row),
+                        key="direction_chart",
+                        width="stretch",
+                        config={"displayModeBar": False, "displaylogo": False},
+                        alt="Current Sun and Earth azimuth and elevation around the lunar observer",
+                    )
+                with direction_data:
+                    st.markdown(
+                        direction_details(
+                            "Sun",
+                            selected_row["sun_az"],
+                            selected_row["sun_el"],
+                            "sun",
+                        ),
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        direction_details(
+                            "Earth",
+                            selected_row["earth_az"],
+                            selected_row["earth_el"],
+                            "earth",
+                        ),
+                        unsafe_allow_html=True,
+                    )
 
     comparison_column, notes_column = st.columns([1.35, 1])
     with comparison_column:
@@ -1595,6 +1607,16 @@ dashboard_styles = """
     .source-banner span { color: var(--muted); }
     .source-live { background: rgba(38,194,129,.1); border-color: rgba(38,194,129,.55); }
     .source-demo { background: rgba(255,200,69,.08); border-color: rgba(255,200,69,.42); }
+    .st-key-mission_visualizations [data-testid="stHorizontalBlock"] {
+      align-items: stretch;
+    }
+    .st-key-mission_visualizations [data-testid="stColumn"] {
+      align-self: stretch;
+    }
+    .st-key-mission_elevation_panel,
+    .st-key-mission_direction_panel {
+      height: 100%;
+    }
     .direction-card {
       border: 1px solid var(--border);
       border-radius: 10px;
