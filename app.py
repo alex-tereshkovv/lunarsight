@@ -356,6 +356,7 @@ def render_header(title: str, subtitle: str, *, compact: bool = False) -> None:
               <span class="version-badge">LunarSight v0.2</span>
             </div>
           </div>
+          <span class="hero-art-credit">AI-generated lunar background</span>
         </section>
         """,
         unsafe_allow_html=True,
@@ -1473,6 +1474,20 @@ dashboard_styles = """
       opacity: .72;
       padding: .7rem .2rem 0;
     }
+    .sidebar-art-credit {
+      position: fixed;
+      z-index: 3;
+      bottom: .7rem;
+      left: .75rem;
+      width: 214px;
+      color: rgba(218,232,245,.66);
+      font-size: .55rem;
+      letter-spacing: .03em;
+      line-height: 1.2;
+      text-align: center;
+      text-shadow: 0 1px 5px #020812;
+      pointer-events: none;
+    }
     .mission-hero {
       position: relative;
       overflow: hidden;
@@ -1492,6 +1507,16 @@ dashboard_styles = """
       box-shadow: inset 0 -28px 42px rgba(3,10,20,.76);
     }
     .mission-hero > div { position: relative; z-index: 1; }
+    .hero-art-credit {
+      position: absolute;
+      z-index: 2;
+      right: .65rem;
+      bottom: .3rem;
+      color: rgba(218,232,245,.62);
+      font-size: .52rem;
+      letter-spacing: .03em;
+      text-shadow: 0 1px 5px #020812;
+    }
     .mission-hero.compact { height: 92px; margin-bottom: .35rem; }
     .mission-hero.compact h1 { font-size: 1.45rem; margin: .12rem 0; }
     .mission-hero.compact p { font-size: .76rem; }
@@ -1788,7 +1813,8 @@ with st.sidebar:
     )
     st.markdown(
         '<div class="sidebar-footer">Independent mission-planning prototype<br>'
-        'NASA JPL Horizons data integration</div>',
+        'NASA JPL Horizons data integration</div>'
+        '<div class="sidebar-art-credit">Lunar landscape: AI-generated</div>',
         unsafe_allow_html=True,
     )
 

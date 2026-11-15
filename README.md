@@ -1,147 +1,86 @@
 # LunarSight
 
-## [OPEN LUNARSIGHT — LIVE DEMO](https://lunarsight.streamlit.app/)
+## [Open the live app](https://lunarsight.streamlit.app/)
 
-**Lunar South Pole Landing Site Navigator**
+**A lunar south-pole mission-planning prototype built for a NASA Space Apps-style hackathon.**
 
-LunarSight is an interactive Streamlit application for comparing the apparent
-positions of the Sun and Earth above candidate locations near the lunar south
-pole. It combines NASA JPL Horizons observer ephemerides with an offline,
-explicitly synthetic reference profile for reliable hackathon presentations.
+LunarSight started with a simple question: *if you were planning work near the
+Moon's south pole, when would you be able to see the Sun and Earth from a
+specific location?*
 
-LunarSight is a NASA Space Apps-style educational prototype. It is not
-affiliated with or endorsed by NASA and is not a flight-certified mission
-planning or landing-safety system.
+The app turns that question into an interactive dashboard. You can choose a
+lunar surface station, select a UTC observation period, inspect Sun and Earth
+angles, compare two locations, export the displayed ephemeris table, and explore
+a conceptual rover scenario.
 
-## Scientific problem
+We built LunarSight as an educational prototype, not as a flight tool. It is not
+affiliated with or endorsed by NASA, and it must not be used for landing safety
+or operational mission decisions.
 
-Long-duration operations near the lunar south pole depend on when the Sun and
-Earth are geometrically visible from a surface location. LunarSight helps a
-mission-planning team inspect that geometry over a shared UTC interval and
-compare candidate coordinates without presenting an arbitrary suitability
-score.
+## What you can do
 
-## Main features
+- Request real topocentric Sun and Earth ephemerides from NASA JPL Horizons.
+- Work offline with a clearly labelled synthetic reference profile.
+- Explore 24, 48, or 72 hours of azimuth and elevation data.
+- Compare two lunar surface observers over exactly the same UTC interval.
+- Scrub through a compass view and see where the Sun and Earth are relative to
+  an ideal local horizon.
+- Download the exact displayed ephemeris table as a UTC-preserving CSV file.
+- Explore a synchronized Solar Rover Planner built around seven published NASA
+  representative-traverse stations.
+- Use a bundled, validated Horizons cache for a reliable presentation when the
+  network is unavailable.
 
-- Live Sun and Earth azimuth/elevation from NASA JPL Horizons.
-- Clearly labelled synthetic reference profile that works without a network.
-- Landing-site, UTC start-date, and 24/48/72-hour mission configuration.
-- Interactive Plotly elevation and direction visualizations.
-- Matched-period comparison of two lunar surface observers.
-- Synchronized Solar Rover Planner with seven published NASA representative-
-  traverse stations, UTC scrubbing, loop playback, and separate Visibility
-  Optimization and conceptual Continuous Exploration modes.
-- Georeferenced terrain hillshade preprocessed from NASA PGDA Site01/Site04
-  LOLA 5 m/pixel DEMs in lunar south-polar stereographic metres.
-- Explicitly manifested offline NASA cache for the seven rover stations over
-  2026-11-14 through 2026-11-21 UTC; never substituted for another period.
-- UTC-preserving CSV export of the exact displayed ephemeris table.
-- Graceful API-error handling and one-hour caching of successful live results.
-- Responsive dark mission-control dashboard.
+## A quick tour
 
-## Technology
+### Mission Control
 
-- Python 3.12 (Python 3.11+ is supported locally)
-- Streamlit
-- pandas
-- Plotly
-- Requests
-- NASA JPL Horizons API
+Choose a station, date, duration, and data source. The main chart shows Sun and
+Earth elevation through time, while the compass shows their current azimuth and
+elevation at the selected timestamp.
 
-## Run locally on Windows
+### Site Comparison
 
-From PowerShell in the cloned repository:
+Select two stations and compare them over one shared observation period. Live
+mode requests separate ephemerides for each location. LunarSight never quietly
+mixes NASA data for one site with synthetic data for another.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
-```
+### Solar Rover Planner
 
-If the `py` launcher is unavailable, replace `py -3.12` with `python`.
-Activation is optional because the commands use the virtual-environment Python
-directly. Streamlit normally opens `http://localhost:8501`.
+The rover view combines published station coordinates, geometric visibility,
+and a conceptual movement timeline. The rover, chart cursor, status panel, and
+map position all follow the same mission clock.
 
-Run the automated checks:
+The route overlay is intentionally described as conceptual. Straight station
+links are not NASA traverse polylines and are not claims of terrain safety or
+verified traversability.
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m compileall -q app.py comparison.py horizons.py ephemeris_export.py tests
-```
+## Where the data comes from
 
-## Streamlit Community Cloud deployment
+### NASA JPL Horizons
 
-The production entry point is `app.py`. The deployment requires no secrets,
-database, Docker image, or operating-system packages.
+Live Sun and Earth angles come from the official
+[NASA JPL Horizons API](https://ssd-api.jpl.nasa.gov/doc/horizons.html) and
+[Horizons manual](https://ssd.jpl.nasa.gov/horizons/manual.html).
 
-1. Push an approved stable branch to GitHub.
-2. Open [Streamlit Community Cloud](https://share.streamlit.io/).
-3. Select **Create app** and **Yup, I have an app**.
-4. Choose repository `alex-tereshkovv/lunarsight`.
-5. Choose the approved deployment branch.
-6. Set the main file path to `app.py`.
-7. In **Advanced settings**, select Python `3.12`.
-8. Leave the secrets field empty and deploy.
+LunarSight uses:
 
-Community Cloud reads `requirements.txt` and `.streamlit/config.toml` from the
-repository root. Static visual assets are committed under `static/assets/` and
-served through Streamlit's static-file handler. Pushing a new commit to the
-configured stable branch triggers Streamlit Community Cloud's normal app
-update process.
+- lunar surface observer: `coord@301`;
+- Sun target: `10`;
+- Earth target: `399`;
+- observer quantity: `4`;
+- one-hour steps;
+- UTC timestamps;
+- airless apparent azimuth and elevation in degrees.
 
-## Five-minute demonstration workflow
+Successful live results are cached for one hour to avoid unnecessary API calls.
 
-1. Open **Mission Control** with `Reference Profile (Synthetic)` to show the dashboard,
-   observation-time control, data table, and CSV export without relying on the
-   network.
-2. Point out the synthetic source label and `SYNTHETIC_DEMO` filename marker.
-3. Switch to `Live NASA (Horizons)` and run one configured observation period.
-4. Open **Site Comparison**, select two locations, and compare the same UTC
-   interval for both observers.
-5. Open **Solar Rover Planner**. The default fixed-period dataset is a real,
-   locally cached NASA Horizons result. In **Visibility Optimization**, press
-   Play and scrub the scientific timeline to confirm that the rover, chart,
-   UTC cursor, and status panel stay synchronized. Then select **Continuous
-   Exploration** to demonstrate a clearly labelled conceptual closed route and
-   loop playback. The optional live mode makes separate Sun and Earth requests
-   for each of seven verified stations.
-6. Open **Data & Sources** and **About** to explain provenance and limitations.
+### Published lunar stations
 
-If Horizons is unavailable, Mission Control reports the error and changes to a
-clearly labelled `Reference Profile (Synthetic Fallback)` dataset. Site Comparison never mixes live
-NASA data for one site with synthetic data for the other.
-
-## Data contract and coordinate convention
-
-Each validated ephemeris row has this schema:
-
-```text
-time_utc,sun_az,sun_el,earth_az,earth_el
-```
-
-- `time_utc`: timezone-aware ISO 8601 UTC timestamp.
-- `sun_az`, `earth_az`: degrees in `[0, 360)`, clockwise from local north
-  through east.
-- `sun_el`, `earth_el`: degrees in `[-90, 90]`, relative to the ideal local
-  horizontal plane.
-- Site coordinates: lunar geodetic latitude and east-positive longitude.
-
-The lunar surface observer is `coord@301`. Live requests use target ID `10`
-for the Sun, target ID `399` for Earth, observer quantity `4`, one-hour steps,
-UTC, and the airless apparent-elevation model. Successful results are cached
-for one hour with a bounded cache size.
-
-The API request syntax follows the official
-[NASA JPL Horizons API documentation](https://ssd-api.jpl.nasa.gov/doc/horizons.html)
-and [Horizons manual](https://ssd.jpl.nasa.gov/horizons/manual.html).
-
-## Solar Rover Planner data provenance
-
-The planner uses the following east-positive station coordinates from NASA's
+The rover planner uses east-positive coordinates published in NASA's
 [Lunar Surface Data Book, M2M-30044 (2025)](https://ntrs.nasa.gov/api/citations/20250002845/downloads/M2M-30044%20Lunar%20Surface%20Data%20Book%20Baseline_Final.pdf):
 
-| Station | Latitude | Longitude |
+| Station | Latitude | East longitude |
 | --- | ---: | ---: |
 | CR1 | -89.468° | 222.6° E |
 | CR2 | -89.500° | 222.1° E |
@@ -151,87 +90,136 @@ The planner uses the following east-positive station coordinates from NASA's
 | SR3 | -89.808° | 205.9° E |
 | PSR1 | -89.575° | 196.7° E |
 
-The terrain backdrop is a display hillshade built offline from NASA PGDA
+These are representative traverse stations, not certified landing sites.
+
+### Terrain background
+
+The rover map hillshade was preprocessed offline from NASA PGDA
 [Site01 Connecting Ridge and Site04 Shackleton Rim LOLA products](https://pgda.gsfc.nasa.gov/data/LOLA_5mpp/).
-The source GeoTIFFs are 5 m/pixel, use south-polar stereographic X/Y metres,
-and reference `MOON_ME`/DE421. The committed crop, projection parameters,
-processing note, and source URLs are recorded in
-`data/rover_map_manifest.json`. The scale bar and station positions are derived
-from that projected coordinate system. The hillshade uses a fixed display
-light direction and is not a timestamp-specific sunlight or shadow simulation.
+The original GeoTIFFs are 5 m/pixel and use lunar south-polar stereographic
+coordinates in metres. Projection details, processing notes, and source URLs are
+recorded in `data/rover_map_manifest.json`.
 
-The main map is the georeferenced Site01/Site04 route crop. The current
-[IAU/USGS control-network centre for Shackleton](https://planetarynames.wr.usgs.gov/Feature/5450)
-is `89.67° S, 129.78° E`, just outside that crop, so LunarSight does not attach
-the crater name to an unrelated dark feature. Instead, the compact inset uses
-NASA's separate-scale
-[multi-temporal south-pole overview](https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/)
-with Shackleton at its published centre. The inset is context only, not the
-route-map scale and not timestamp-specific sunlight.
+The hillshade is terrain visualization, not a real-time sunlight simulation.
+The overview inset uses NASA's historical
+[south-pole illumination reference](https://science.nasa.gov/resource/illumination-map-of-the-moons-south-pole/)
+for regional context only.
 
-Visibility Optimization uses the real station ephemerides to make conservative
-geometric visibility decisions. Continuous Exploration is a conceptual
-closed walk along explicit graph links and does not claim optimality. Because
-the NASA traverse polylines have not been digitized into LunarSight, all drawn
-links remain straight conceptual connectors between published stations. Their
-display length is not a published NASA traverse length, a terrain-safe path, or
-verified traversability.
+### Decorative visual assets
 
-## Scientific limitations
+The lunar mountain illustration in the page header and the lunar landscape in
+the left sidebar are **AI-generated decorative backgrounds**. They are labelled
+inside the app and are not scientific imagery or analysis inputs.
 
-LunarSight reports geometric target-center visibility relative to an ideal
-zero-degree local horizon:
+This is separate from the Solar Rover Planner hillshade, which is derived from
+NASA LOLA elevation products and is documented in the map manifest.
 
-- Local lunar topography, crater walls, ridges, and terrain shadowing are not
-  modeled. Positive Sun elevation is not proof of surface illumination.
-- Positive Earth elevation is not proof of a reliable communication link.
-  Antenna patterns, margins, relay geometry, and link budgets are not modeled.
-- Elevation describes the center of the Sun or Earth, not its full disk.
-- Landing hazards, slopes, thermal conditions, navigation uncertainty, and
-  operational safety margins are outside the current model.
-- Catalog coordinates are NASA-published representative traverse stations from
-  M2M-30044 (2025), not validated landing sites or terrain-safe route points.
-- Solar Rover Planner station coordinates are published NASA representative-
-  traverse locations. The dashed connector is conceptual and is not the NASA
-  route polyline or a terrain/traversability product.
-- Continuous Exploration selects a closed conceptual station walk that fits the
-  selected mission period. Its repeated playback is an interface visualization,
-  not a visibility optimum or an autonomous-navigation result.
-- The LOLA-derived background is a terrain hillshade, not real-time sunlight.
-  The historical NASA
-  [south-pole illumination reference](https://science.nasa.gov/photojournal/south-pole-illumination-map/)
-  is multi-temporal and is not used as a timestamp-specific shadow model.
-- Rover planning uses a spherical-Moon distance estimate, configured maximum
-  speed, explicit local links, and a conservative visibility-window heuristic.
-  It does not model slope, wheel slip, energy storage, thermal constraints,
-  hazards, or optimal real-world navigation.
+## Run LunarSight locally on Windows
+
+Open PowerShell in the repository folder:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+If the `py` launcher is unavailable, use `python` instead of `py -3.12`.
+Activating the virtual environment is optional because the commands above call
+its Python executable directly.
+
+Streamlit normally opens the app at `http://localhost:8501`.
+
+Run the checks with:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m compileall -q app.py comparison.py horizons.py ephemeris_export.py tests
+```
+
+Python 3.11 or newer is supported locally. The deployed app uses Python 3.12.
+
+## A short presentation flow
+
+1. Start in **Mission Control** with the synthetic reference profile so the
+   demonstration does not depend on the network.
+2. Move the UTC slider and show that the compass and Sun/Earth cards update
+   together.
+3. Open the observation table and export its CSV file. The filename clearly
+   identifies synthetic data as `SYNTHETIC_DEMO`.
+4. Switch to **Live NASA (Horizons)** and request a real observation period.
+5. Open **Site Comparison** and compare two stations over the same timestamps.
+6. Open **Solar Rover Planner**, play the cached NASA scenario, and scrub the
+   timeline to show that the rover and scientific panels remain synchronized.
+7. Finish on **Data & Sources** to explain provenance and limitations.
+
+If Horizons is unavailable, Mission Control reports the network error and uses
+the explicitly labelled `Reference Profile (Synthetic Fallback)`. Live Site
+Comparison shows no partial result rather than mixing sources.
+
+## Ephemeris format
+
+Every validated row follows this schema:
+
+```text
+time_utc,sun_az,sun_el,earth_az,earth_el
+```
+
+- `time_utc` is a timezone-aware ISO 8601 UTC timestamp.
+- `sun_az` and `earth_az` are degrees in `[0, 360)`, measured clockwise from
+  local north through east.
+- `sun_el` and `earth_el` are degrees in `[-90, 90]`, measured relative to an
+  ideal local horizontal plane.
+- Station coordinates use lunar geodetic latitude and east-positive longitude.
+
+## What LunarSight does not model
+
+This is the part we do not want to hide behind a polished interface:
+
+- A positive Sun elevation means geometric visibility of the Sun's center. It
+  does not guarantee surface illumination because nearby terrain and shadows
+  are not modeled.
+- A positive Earth elevation does not guarantee a reliable radio link. Antenna
+  patterns, margins, relay geometry, and link budgets are outside the model.
+- Elevation refers to the center of the Sun or Earth, not the full disk.
+- Lunar slopes, landing hazards, wheel slip, energy storage, thermal limits,
+  localization uncertainty, and operational safety margins are not modeled.
+- The route overlay connects published stations conceptually. It is not a
+  terrain-safe path, an autonomous-navigation result, or a published NASA
+  traverse length.
+- Continuous Exploration is a repeatable visualization mode, not an optimal
+  route or visibility solution.
+- The map hillshade uses a fixed display light direction and does not represent
+  timestamp-specific illumination.
 
 ## Project structure
 
-- `app.py` — Streamlit navigation, source orchestration, and presentation.
+- `app.py` — Streamlit interface, navigation, and data-source orchestration.
 - `horizons.py` — Horizons request construction, parsing, and validation.
 - `comparison.py` — aligned site-comparison helpers and charts.
 - `ephemeris_export.py` — UTC-safe CSV serialization and filenames.
-- `rover_planner.py` — verified station models, visibility evaluation,
-  travel-time constrained conceptual routing, interpolation, and payloads.
-- `rover_geo.py` — verified station catalog, lunar south-polar projection, map
-  normalization, and projected scale-bar helpers.
-- `rover_component.py` — Streamlit Components v2 map/timeline renderer using a
-  single client-side simulation clock.
-- `sites.json` — NASA-published representative traverse-station catalog.
-- `data/demo_ephemeris.csv` — bundled offline synthetic data.
-- `data/rover_nasa_cache/` — validated, locally stored Horizons tables and a
-  provenance manifest for the fixed 2026-11-14 seven-day rover scenario.
-- `data/rover_map_manifest.json` — LOLA crop, projection, processing, and source
-  provenance for the rover hillshade.
-- `static/assets/` — decorative dashboard image assets.
-- `static/assets/lola-shackleton-hillshade.webp` — compact display hillshade
-  preprocessed from NASA PGDA Site01/Site04 LOLA elevation products.
-- `scripts/` — reproducible offline tools for rebuilding the basemap and fixed
-  Horizons cache; the application never downloads multi-gigabyte rasters at
-  runtime.
-- `.streamlit/config.toml` — theme and static-serving configuration.
+- `rover_planner.py` — station models, conceptual routing, and synchronized
+  simulation payloads.
+- `rover_geo.py` — lunar projection and map-coordinate helpers.
+- `rover_component.py` — Streamlit Components v2 rover map and timeline.
+- `sites.json` — NASA-published representative-station catalog.
+- `data/demo_ephemeris.csv` — bundled synthetic reference data.
+- `data/rover_nasa_cache/` — fixed-period validated Horizons tables and
+  provenance manifest.
+- `data/rover_map_manifest.json` — LOLA crop and projection provenance.
+- `static/assets/` — decorative interface assets and the processed rover map.
+- `scripts/` — offline tools for rebuilding the map and Horizons cache.
 - `tests/` — offline unit and Streamlit regression tests.
+
+## Deployment
+
+The production entry point is `app.py`. Streamlit Community Cloud reads
+`requirements.txt` and `.streamlit/config.toml` from the repository root. The
+app needs no secrets, database, Docker image, or operating-system packages.
+
+Pushing to the configured stable branch triggers the normal Community Cloud
+update process.
 
 ## Team Contributions
 

@@ -89,6 +89,15 @@ def test_dashboard_assets_and_streamlit_theme_are_packaged():
     assert "static_asset_url('lunar-crescent.png')" in source
 
 
+def test_decorative_ai_backgrounds_are_clearly_disclosed():
+    source = (ROOT / "app.py").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "AI-generated lunar background" in source
+    assert "Lunar landscape: AI-generated" in source
+    assert "AI-generated decorative backgrounds" in readme
+    assert "NASA LOLA elevation products" in readme
+
+
 def test_live_network_error_falls_back_to_demo_charts():
     with patch(
         "horizons.fetch_ephemeris",
