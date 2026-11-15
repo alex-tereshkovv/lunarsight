@@ -302,8 +302,9 @@ def direction_chart(row: pd.Series) -> go.Figure:
         ),
     ))
     figure.update_layout(
-        height=330,
-        margin={"l": 30, "r": 30, "t": 30, "b": 25},
+        height=310,
+        autosize=True,
+        margin={"l": 62, "r": 52, "t": 32, "b": 32, "autoexpand": True},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={"color": COLORS["text"], "family": "Inter, Segoe UI, sans-serif"},
@@ -375,8 +376,8 @@ def direction_details(name: str, azimuth: float, elevation: float, css_class: st
     return f"""
     <div class="direction-card {css_class}">
       <div class="direction-name">{icon_svg(icon, 24)}{name}</div>
-      <div>Azimuth <b>{azimuth:.2f}°</b></div>
-      <div>Elevation <b>{elevation:+.2f}°</b></div>
+      <div class="direction-value-row"><span>Azimuth</span><b>{azimuth:.2f}°</b></div>
+      <div class="direction-value-row"><span>Elevation</span><b>{elevation:+.2f}°</b></div>
       <span class="visibility-pill {status_class}">{status}</span>
     </div>
     """
@@ -1277,7 +1278,7 @@ def render_mission_control(sites: list[dict]) -> None:
                 )
                 selected_row = frame.loc[frame["time_utc"] == selected_time].iloc[0]
                 direction_visual, direction_data = st.columns(
-                    [1.25, 1],
+                    [1.55, 1],
                     vertical_alignment="center",
                 )
                 with direction_visual:
@@ -1629,7 +1630,19 @@ dashboard_styles = """
     .direction-card.sun { box-shadow: inset 3px 0 var(--sun); }
     .direction-card.earth { box-shadow: inset 3px 0 var(--earth); }
     .direction-name { color: var(--text); font-size: 1rem; font-weight: 800; margin-bottom: .32rem; }
-    .direction-card b { color: var(--text); float: right; }
+    .direction-value-row {
+      align-items: baseline;
+      display: flex;
+      gap: .5rem;
+      justify-content: space-between;
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .direction-card b {
+      color: var(--text);
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+    }
     .visibility-pill {
       display: inline-block;
       margin-top: .2rem;
@@ -1641,6 +1654,19 @@ dashboard_styles = """
     .visibility-pill.above { background: #128548; color: #E5FFF0; }
     .visibility-pill.below { background: #A62532; color: #FFE9EC; }
     .visibility-pill.horizon { background: #526981; color: #F1F5FA; }
+    @media (max-width: 1500px) and (min-width: 901px) {
+      .st-key-mission_direction_panel .direction-card {
+        font-size: .76rem;
+        padding: .58rem .62rem;
+      }
+      .st-key-mission_direction_panel .direction-name {
+        font-size: .9rem;
+      }
+      .st-key-mission_direction_panel .visibility-pill {
+        font-size: .62rem;
+        padding: .14rem .35rem;
+      }
+    }
     .comparison-vs {
       display: flex;
       align-items: center;
